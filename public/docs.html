@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Devnex Enggine Documentation</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; line-height:1.5; color:#0b1220; padding:24px; background:#f7f9fc;}
+    header { margin-bottom:18px; }
+    h1 { font-size:1.6rem; margin:0 0 6px; }
+    h2 { font-size:1.15rem; margin-top:20px; }
+    .lead { color:#42526e; margin-bottom:12px; }
+    .card { background:#fff; border-radius:8px; padding:16px; box-shadow:0 1px 2px rgba(10,10,10,0.05); margin-bottom:12px; }
+    pre { background:#0f1724; color:#e6eef8; padding:12px; border-radius:6px; overflow:auto; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th, td { padding:8px 6px; border-bottom:1px solid #eef2f7; text-align:left; font-size:0.95rem; }
+    .badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:0.85rem; }
+    .good { background:#dff6e0; color:#0a6b3a; }
+    .warn { background:#fff4e5; color:#7a4b00; }
+    .bad { background:#ffe9e9; color:#7a1b1b; }
+    code.k { color:#0b6ef6; font-weight:600; }
+    .example { font-size:0.95rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Ai Signals — Full Guide</h1>
+    <p class="lead">This document explains every field a signal may contain, how the ai enggine computes the most important metrics, how to interpret them, and recommended actions. The field names reflect the `get_display_data` and tracking logic used in the enggine code.</p>
+  </header>
+
+  <section class="card">
+    <h2>1. Quick summary (one-line)</h2>
+    <p>Each signal object represents a coin detected by the screener with raw metrics (price, volume, RSI), derived analytics (health_score, trend_strength, momentum_phase), and a <code class="k">smart_confidence </code> score which the enggine uses to rank signals. Use <code class="k">health_score </code> and <code class="k">trend_strength </code> for quality checks; follow <code class="k">risk_level</code> and <code class="k">momentum_phase</code> for tactical actions.</p>
+  </section>
+
+  <section class="card">
+    <h2>2. Example signal (JSON)</h2>
+    <pre>{
+  "symbol": "ABC",
+  "name": "ABC Token",
+  "current_price": 0.1234,
+  "current_score": 48,
+  "enhanced_score": 62.1,
+  "price_change_1h": 3.2,
+  "price_change_4h": 8.5,
+  "price_change_24h": 12.4,
+  "market_cap": 25000000,
+  "total_volume": 1500000,
+  "volume_spike_ratio": 2.3,
+  "volume_acceleration": 0.18,
+  "volume_consistency": 0.82,
+  "volume_surge": 1.6,
+  "rsi_fast": 78.2,
+  "rsi_slow": 56.7,
+  "rsi_delta": 21.5,
+  "momentum_regime": "STRONG_BULL",
+  "momentum_phase": "ACCELERATION",
+  "smart_confidence": 78,
+  "health_score": 84,
+  "trend_strength": 72,
+  "risk_level": "LOW",
+  "appearance_count": 4,
+  "performance_since_first": 18.3,
+  "score_improvement": 14.1,
+  "smart_alerts": ["💎 Excellent health score", "⚡ Strong momentum with confirmation"],
+  "order_blocks_count": 2,
+  "order_block_alignment": "NEAR_SUPPORT",
+  "order_block_score": 0.72,
+  "multi_tf_confirmation": "BULL",
+  "binance_ratio": 0.4,
+  "liquidity_score": 0.7,
+  "market_context_score": 0.62
+}</pre>
+    <p class="example">This is a condensed example of the structure produced by <code class="k">get_display_data()</code>.</p>
+  </section>
+
+  <section class="card">
+    <h2>3. Field-by-field explanation & interpretation</h2>
+
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Meaning</th><th>How to read / thresholds</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code class="k">symbol</code></td>
+          <td>Exchange symbol (e.g. BTC, ETH, ABC)</td>
+          <td>Primary identifier.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">current_price</code></td>
+          <td>Latest market price (quote USD/USDT)</td>
+          <td>Used to compute performance and proximity to order blocks.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">current_score</code></td>
+          <td>Base/initial screening score (0–100)</td>
+          <td>Raw screening result before confidence & momentum adjustments.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">enhanced_score</code></td>
+          <td>Final score after confidence, momentum & market adjustments</td>
+          <td>Higher → more attractive. enggine uses this to sort and filter new signals. See score calculation (combining base score, smart_confidence, momentum).</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">price_change_1h / 4h / 24h</code></td>
+          <td>Percent price movement over timeframes</td>
+          <td>Use to judge short-term momentum. Large 1h increase + volume spike indicates a pump; large 24h increase with weak volume may be unstable.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">volume_spike_ratio</code></td>
+          <td>Recent volume / historical volume (e.g. last 6 vs last 24)</td>
+          <td>&gt;2.0 = big spike (risky but strong). enggine thresholds: surge >2.0 is notable.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">volume_acceleration</code></td>
+          <td>Weighted acceleration of volume (multi-window)</td>
+          <td>Positive & large → confirming bullish interest. Used in trend strength calc.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">volume_consistency / volume_surge</code></td>
+          <td>Consistency metric for volume and surge normalization</td>
+          <td>High consistency (>0.75) + surge → healthier trend; low consistency → spikes are erratic.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">rsi_fast / rsi_slow / rsi_delta</code></td>
+          <td>RSI (fast & slow) and their difference (momentum delta)</td>
+          <td>rsi_fast &gt; rsi_slow (large rsi_delta positive) signals accelerating momentum. The enggine interprets rsi_delta into regimes and uses it in trend strength and momentum detection.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">momentum_regime</code></td>
+          <td>Global momentum label (e.g. STRONG_BULL, BULL, NEUTRAL, BEAR)</td>
+          <td>Used as a categorical signal for confidence and risk. Strong bull increases confidence; bear reduces it. </td>
+        </tr>
+
+        <tr>
+          <td><code class="k">momentum_phase</code></td>
+          <td>Lifecycle phase: ACCUMULATION, ACCELERATION, PARABOLIC, DISTRIBUTION, CAPITULATION, CONSOLIDATION</td>
+          <td>Phase guides tactical actions: <span class="badge good">ACCUMULATION</span> = early; <span class="badge warn">ACCELERATION</span> = entry zone; <span class="badge bad">PARABOLIC</span> = high risk / consider taking profits. Determined from appearance_count, performance and volume.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">health_score</code></td>
+          <td>Composite quality metric (0–100) combining performance, volume, momentum, consistency</td>
+          <td>&gt;75 = healthy, &lt;45 = risky. The enggine computes a weighted average across performance, volume trend, momentum trend, etc.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">trend_strength</code></td>
+          <td>Numeric trend power (0–100) used to rank the signal</td>
+          <td>Higher = stronger validated trend. Derived from performance magnitude, volume strength, momentum, RSI delta and appearance count.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">smart_confidence</code></td>
+          <td>Engine confidence combining market context, volume_profile, momentum, orderblocks</td>
+          <td>Used together with enhanced_score and health_score to set priority and Telegram updates. See SmartConfidenceEngine logic. </td>
+        </tr>
+
+        <tr>
+          <td><code class="k">risk_level</code></td>
+          <td>CONVERTED RISK: VERY_LOW, LOW, MEDIUM, HIGH</td>
+          <td>Derived from performance extremes, health_score and volume extremes. If <span class="badge bad">HIGH</span>, treat as high-risk—prefer taking profits or staying out.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">appearance_count</code></td>
+          <td>How many times coin has been reported by the screener</td>
+          <td>Multiple appearances increase reliability. enggine gives special handling and longer retention to top performers. </td>
+        </tr>
+
+        <tr>
+          <td><code class="k">performance_since_first</code></td>
+          <td>Percent change since first detection by the tracking system</td>
+          <td>Use to estimate realized pump/dump since detection; large positive implies good momentum but also greater risk of reversal.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">score_improvement</code></td>
+          <td>Difference between current enhanced_score and first_score</td>
+          <td>Large positive → accelerating interest; triggers “SCORE SURGE” messages. </td>
+        </tr>
+
+        <tr>
+          <td><code class="k">smart_alerts</code></td>
+          <td>List of short human-readable alerts generated by tracking</td>
+          <td>Examples: "💎 Excellent health score", "🎚️ Volume surge detected". Useful for quick reading.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">order_blocks_count / order_block_alignment / order_block_score</code></td>
+          <td>Supply/demand blocks count and alignment relative to price</td>
+          <td>NEAR_SUPPORT + high order_block_score = price near strong demand—lower-risk entry. Alignment calculation is in orderblock analyzer.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">multi_tf_confirmation</code></td>
+          <td>Multi-timeframe confirmation label</td>
+          <td>BULL / NEUTRAL / BEAR across the most important TFs. Use as a confirmation layer.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">binance_ratio / liquidity_score</code></td>
+          <td>Liquidity proxies—exchange presence & relative volume</td>
+          <td>Low binance_ratio or liquidity_score suggests low tradability — higher slippage & risk.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">market_context_score</code></td>
+          <td>Global market context (BTC trend + Fear&Greed adjustments)</td>
+          <td>Lower scores indicate unfavorable market regimes; used to downweight confidence & score.</td>
+        </tr>
+
+        <tr>
+          <td><code class="k">sector_table</code></td>
+          <td>table to validate whether this coin is from a sector that is currently in the top 10 money inflows</td>
+          <td>If the top 10 badge appears, the coin will have more potential to increase.</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>4. How the enggine decides priority / urgency</h2>
+    <p>The enggine computes a combined priority using <code class="k">enhanced_score</code>, <code class="k">smart_confidence</code>, <code class="k">health_score</code>, <code class="k">trend_strength</code>, absolute performance and appearance count. The aggregator returns a category (e.g. <span class="badge good">🔥 HIGHEST</span>, <span class="badge good">🚀 HIGH</span>, <span class="badge warn">📈 MEDIUM-HIGH</span>, ...). Use <span class="badge good">HIGHEST/HIGH</span> to trigger immediate attention and possible allocation; <span class="badge warn">MEDIUM</span> to watch; <span class="badge bad">LOW</span> to ignore.</p>
+  </section>
+
+  <section class="card">
+    <h2>5. Practical reading — decision rules (examples)</h2>
+    <ol>
+      <li><strong>Buy candidate (conservative):</strong>
+        <ul>
+          <li>health_score &gt; 75 AND trend_strength &gt; 60</li>
+          <li>smart_confidence &gt; 65 AND multi_tf_confirmation == "BULL"</li>
+          <li>order_block_alignment == "NEAR_SUPPORT" preferred</li>
+        </ul>
+      </li>
+      <li><strong>Speculative entry (higher risk):</strong>
+        <ul>
+          <li>enhanced_score &gt; 65 AND volume_spike_ratio &gt; 2.0 AND health_score &gt; 60</li>
+          <li>If momentum_phase == "PARABOLIC" → consider taking partial profits or setting tight SL</li>
+        </ul>
+      </li>
+      <li><strong>Avoid / exit:</strong>
+        <ul>
+          <li>risk_level == "HIGH" OR health_score &lt; 45</li>
+          <li>performance_since_first &gt; 40% with momentum_phase == "DISTRIBUTION" (possible top)</li>
+        </ul>
+      </li>
+    </ol>
+    <p>These are examples — adapt thresholds to your strategy and position sizing rules.</p>
+  </section>
+
+  <section class="card">
+    <h2>6. Where values come from in the code (reference)</h2>
+    <ul>
+      <li><strong>Display payload / DB fields:</strong> function <code class="k">get_display_data(signal)</code> composes all display fields. </li>
+      <li><strong>Health score:</strong> computed in <code class="k">_calculate_enhanced_health_score</code> — weighted factors: performance, score improvement, volume trend, momentum trend, price trend, appearance_count, consistency. </li>
+      <li><strong>Trend strength:</strong> computed in <code class="k">_calculate_enhanced_trend_strength</code>, uses performance magnitude, volume strength, momentum strength, RSI delta, appearance strength. </li>
+      <li><strong>Smart confidence:</strong> computed in <code class="k">calculate_enhanced_smart_confidence</code> — aggregates market_context, volume_profile, momentum regime, order blocks, etc.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>7. Quick troubleshooting</h2>
+    <ul>
+      <li><strong>Missing fields:</strong> If a signal lacks a field, check the data pipeline step that extracts klines/volumes — default fallbacks exist in the code (e.g. default RSI=50, volume_spike=1).</li>
+      <li><strong>Low confidence even with pump:</strong> Market context (BTC trend & Fear&Greed) can reduce smart_confidence. See MarketContextAnalyzer.</li>
+      <li><strong>Order block detection noisy:</strong> OrderBlockLiteAnalyzer requires min lookback; if klines < threshold it returns empty. Increase lookback data.</li>
+      <li><strong>Signals not showing in UI:</strong> The screener saves UI signals into <code class="k">self.last_ui_signals</code> and DB via the database manager — check DB insert logs for errors.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>8. Glossary (short)</h2>
+    <ul>
+      <li><strong>Health score:</strong> composite gauge of signal robustness (0–100).</li>
+      <li><strong>Trend strength:</strong> how strong the detected trend is (0–100).</li>
+      <li><strong>Smart confidence:</strong> model confidence combining market, volume and orderblock signals.</li>
+      <li><strong>Order block:</strong> historical area of price rejection/absorption (demand/supply).</li>
+      <li><strong>Momentum phase:</strong> lifecycle stage of the move (guides trade urgency).</li>
+    </ul>
+  </section>
+
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Performance Tracking – Documentation</title>
+  <style>
+    body { font-family: system-ui, -apple-system,"Segoe UI",Roboto,"Helvetica Neue"; line-height:1.55; padding:24px; background:#f7f9fc; color:#111; }
+    h1 { font-size:1.7rem; margin-bottom:6px; }
+    h2 { font-size:1.2rem; margin-top:22px; }
+    .lead { color:#42526e; margin-bottom:12px; }
+    .card { background:#fff; padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-bottom:14px; }
+    pre { background:#0f1724; color:#e6eef8; padding:12px; border-radius:6px; overflow:auto; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th, td { padding:8px 6px; border-bottom:1px solid #e5e9f0; text-align:left; }
+    .badge { display:inline-block; padding:4px 8px; border-radius:6px; font-size:0.8rem; }
+    .good { background:#dff6e0; color:#0a6b3a; }
+    .warn { background:#fff4e5; color:#7a4b00; }
+    .bad  { background:#ffe9e9; color:#7a1b1b; }
+    code.k { color:#0b6ef6; font-weight:600; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Performance Tracking — Full Guide</h1>
+  <p class="lead">This guide explains how the bot tracks historical performance for each signal, how values evolve after the first appearance, and how to interpret performance metrics in real-time trading decisions.</p>
+</header>
+
+
+<section class="card">
+  <h2>1. Overview of the Performance Tracking System</h2>
+  <p>The performance engine records every coin from the moment it first appears in the screener. Over time, it updates:</p>
+  <ul>
+    <li>price evolution and percent change</li>
+    <li>score progression</li>
+    <li>momentum phase transitions</li>
+    <li>appearance frequency</li>
+    <li>volume and trend behaviors</li>
+  </ul>
+
+  <p>This forms the <code class="k">tracking_performance</code> object inside <code class="k">get_display_data()</code>, and is used by dashboard data, and priority ranking.</p>
+</section>
+
+
+
+<section class="card">
+  <h2>2. Example – Tracking Performance JSON</h2>
+<pre>{
+  "first_price": 0.091,
+  "current_price": 0.127,
+  "performance_since_first": 39.56,
+  "score_improvement": 18.2,
+  "appearance_count": 5,
+  "normalized_performance": 0.68,
+  "momentum_phase": "ACCELERATION",
+  "alerts": [
+    "🔥 Strong normalized growth",
+    "📈 Momentum accelerating",
+    "⭐ Multiple reappearances confirm trend"
+  ]
+}</pre>
+</section>
+
+
+
+<section class="card">
+  <h2>3. Field-by-Field Explanation & Interpretation</h2>
+
+  <table>
+    <thead>
+      <tr><th>Field</th><th>Description</th><th>How to interpret</th></tr>
+    </thead>
+    <tbody>
+
+      <tr>
+        <td><code class="k">first_price</code></td>
+        <td>The price of the coin when the enggine first detected it.</td>
+        <td>Reference point for all future performance calculations.</td>
+      </tr>
+
+      <tr>
+        <td><code class="k">current_price</code></td>
+        <td>Latest market price from Binance klines.</td>
+        <td>Used to compute performance_since_first.</td>
+      </tr>
+
+      <tr>
+        <td><code class="k">performance_since_first</code></td>
+        <td>Percent gain/loss since detection.</td>
+        <td>
+          <span class="badge good">+20% to +80%</span> = strong uptrend<br>
+          <span class="badge warn">+80% to +200%</span> = likely topping<br>
+          <span class="badge bad">negative %</span> = downtrend / fading momentum
+        </td>
+      </tr>
+
+      <tr>
+        <td><code class="k">score_improvement</code></td>
+        <td>The difference between the current <code>enhanced_score</code> and the first score when detected.</td>
+        <td>
+          High improvement = strengthening interest.<br>
+          <span class="badge good">+10+</span> = healthy<br>
+          <span class="badge warn">+20+</span> = speculative acceleration
+        </td>
+      </tr>
+
+      <tr>
+        <td><code class="k">appearance_count</code></td>
+        <td>How many times the screener flagged this coin.</td>
+        <td>
+          <span class="badge good">5+ appearances</span> = reliable trend confirmation.<br>
+          <span class="badge warn">1–2</span> = early discovery phase.
+        </td>
+      </tr>
+
+      <tr>
+        <td><code class="k">normalized_performance</code></td>
+        <td>Performance compressed into 0–1 scale using log smoothing.</td>
+        <td>Helps classify momentum phases evenly, prevents extreme pumps from exploding scores.</td>
+      </tr>
+
+      <tr>
+        <td><code class="k">momentum_phase</code></td>
+        <td>Lifecycle phase based on performance, score delta, and appearance frequency.</td>
+        <td>
+          <span class="badge good">ACCUMULATION</span> — early stage<br>
+          <span class="badge good">ACCELERATION</span> — ideal entry window<br>
+          <span class="badge warn">PARABOLIC</span> — high pump, risky<br>
+          <span class="badge bad">DISTRIBUTION</span> — topping signal<br>
+          <span class="badge bad">CAPITULATION</span> — sharp reversal<br>
+        </td>
+      </tr>
+
+      <tr>
+        <td><code class="k">Since</code></td>
+        <td>age since detection.</td>
+        <td>You can monitor the performance from early detection, for example it increased by
+          <span class="badge good">+8%</span> after 6 hours<br>
+        </td>
+      </tr>
+
+      <tr>
+        <td><code class="k">alerts</code></td>
+        <td>Human-readable performance-based signals.</td>
+        <td>Used in Telegram performance update messages.</td>
+      </tr>
+
+
+    </tbody>
+  </table>
+</section>
+
+
+
+<section class="card">
+  <h2>4. How Momentum Phases Are Determined</h2>
+
+  <p>The enggine uses a multi-factor approach:</p>
+  <ul>
+    <li><strong>normalized_performance</strong> (0–1 scale)</li>
+    <li><strong>score_improvement</strong> trend</li>
+    <li><strong>appearance_count</strong> growth</li>
+    <li><strong>volume & RSI behavior</strong></li>
+  </ul>
+
+  <h3>Phase Rules</h3>
+  <ul>
+    <li><strong>ACCUMULATION</strong>:  
+      normalized_performance &lt; 0.20 and appearance_count ≤ 2
+    </li>
+
+    <li><strong>ACCELERATION</strong>:  
+      0.20–0.55 normalized_performance AND positive score_improvement
+    </li>
+
+    <li><strong>PARABOLIC</strong>:  
+      normalized_performance &gt; 0.55 OR performance_since_first &gt; 60%
+      <br><span class="badge warn">High risk of reversal</span>
+    </li>
+
+    <li><strong>DISTRIBUTION</strong>:  
+      performance_since_first high but score_improvement declining
+    </li>
+
+    <li><strong>CAPITULATION</strong>:  
+      Strong negative performance or severe volume drop
+    </li>
+  </ul>
+</section>
+
+
+
+<section class="card">
+  <h2>5. Alerts Generated by the Tracking Engine</h2>
+
+  <p>The enggine creates alerts based on performance context to help users quickly understand what is happening.</p>
+
+  <ul>
+    <li><strong>🔥 Strong normalized growth</strong> — performance rising smoothly</li>
+    <li><strong>⚡ Acceleration detected</strong> — score up + performance up together</li>
+    <li><strong>📈 Trend continuation likely</strong> — multiple reappearances</li>
+    <li><strong>🚨 Overextended / parabolic</strong> — potential top</li>
+    <li><strong>⚠️ Distribution phase</strong> — momentum slowing</li>
+    <li><strong>💀 Capitulation risk</strong> — collapse likely</li>
+  </ul>
+
+  <p>Alerts combine performance, appearance_count, and volatility conditions to create accurate warnings.</p>
+</section>
+
+
+
+<section class="card">
+  <h2>6. Decision Guide — How to Use Tracking in Trades</h2>
+
+  <h3>Best Opportunities (High Probability)</h3>
+  <ul>
+    <li><span class="badge good">ACCUMULATION</span> + low volatility</li>
+    <li><span class="badge good">ACCELERATION</span> + rising score</li>
+    <li>appearance_count ≥ 3</li>
+  </ul>
+
+  <h3>Short-Term Scalping Zones</h3>
+  <ul>
+    <li><span class="badge warn">PARABOLIC</span></li>
+    <li>performance_since_first &gt; 40%</li>
+    <li>Telegram may send “Trend Still Climbing” updates</li>
+  </ul>
+
+  <h3>Risky or Exit Zones</h3>
+  <ul>
+    <li><span class="badge bad">DISTRIBUTION</span></li>
+    <li><span class="badge bad">CAPITULATION</span></li>
+    <li>score_improvement turning negative</li>
+  </ul>
+
+</section>
+
+
+
+<section class="card">
+  <h2>7. How the enggine Stores and Updates Performance Data</h2>
+
+  <p>Each time the screener detects the same coin:</p>
+  <ol>
+    <li>If first appearance → create tracking entry</li>
+    <li>Else → update fields:
+      <ul>
+        <li>current_price</li>
+        <li>performance_since_first</li>
+        <li>score_improvement</li>
+        <li>appearance_count</li>
+        <li>momentum_phase</li>
+        <li>alerts</li>
+      </ul>
+    </li>
+    <li>Store updated snapshot to database</li>
+  </ol>
+
+  <p>This allows historical tracking even if the enggine restarts.</p>
+</section>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Early Detection Engine Explanation</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; line-height: 1.55; background:#f7f9fc; padding:24px; color:#0b1220; }
+  h1 { font-size:1.7rem; margin-bottom:6px; }
+  h2 { font-size:1.2rem; margin-top:22px; }
+  .card { background:#fff; padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-bottom:14px; }
+  ul { margin-top:6px; }
+  .highlight { background:#eaf4ff; padding:4px 8px; border-radius:6px; }
+  .badge { padding:4px 8px; font-size:0.85rem; border-radius:4px; }
+  .good { background:#dff6e0; color:#0a6b3a; }
+  .warn { background:#fff4e5; color:#7a4b00; }
+  .code { color:#0b6ef6; font-weight:600; }
+</style>
+</head>
+<body>
+
+<h1>Why This Engine Detects Coins Before They Become Top Gainers</h1>
+<p class="lead">This document explains the core reasons why the this engine is engineered to identify early-stage coins *before* they appear as top gainers on the exchange.</p>
+
+
+<div class="card">
+<h2>1. The Engine Focuses on Micro-Movements Before Public Visibility</h2>
+<p>Typical exchanges list top gainers <strong>after the large pump has already occurred</strong>.  
+this engine works in the opposite way: it analyzes <span class="highlight">micro-signals</span> that appear long before a coin reaches the top gainer list.</p>
+
+<ul>
+  <li>small undetected price acceleration</li>
+  <li>micro-volume expansion</li>
+  <li>subtle RSI divergence</li>
+  <li>early trend forming candles</li>
+  <li>initial volatility compression breakouts</li>
+</ul>
+
+<p>These small patterns are the “first footprints” before a coin performs a big run.</p>
+</div>
+
+
+<div class="card">
+<h2>2. Smart-Money Volume Profiling Reveals Early Accumulation</h2>
+<p>Your engine uses advanced multi-window volume metrics such as:</p>
+<ul>
+  <li><span class="code">volume_spike_ratio</span></li>
+  <li><span class="code">volume_acceleration</span></li>
+  <li><span class="code">volume_consistency</span></li>
+  <li><span class="code">volume_surge</span></li>
+</ul>
+
+<p>These allow the engine to detect <strong>gradual accumulation behavior</strong> often executed by institutional or smart-money buyers before a breakout.</p>
+
+<p class="badge good">The engine catches volume footprints that humans usually miss.</p>
+</div>
+
+
+<div class="card">
+<h2>3. Momentum Phase Detection Identifies Early Trend Shifts</h2>
+<p>The engine classifies coins using momentum phases:</p>
+
+<ul>
+  <li><span class="badge good">ACCUMULATION</span> – early quiet phase</li>
+  <li><span class="badge good">ACCELERATION</span> – breakout forming</li>
+  <li><span class="badge warn">PARABOLIC</span> – top gainer stage</li>
+</ul>
+
+<p>By detecting the first two phases (<em>Accumulation</em> &amp; <em>Acceleration</em>), the engine gives signals <strong>before</strong> a coin enters the Top Gainer zone.</p>
+</div>
+
+
+<div class="card">
+<h2>4. Appearance Tracking Confirms Early Trend Strength</h2>
+<p>this engine uses <span class="code">appearance_count</span> to confirm if a coin repeatedly appears in the screener.</p>
+
+<ul>
+  <li>1–2 appearances → early discovery</li>
+  <li>3–5 appearances → emerging trend</li>
+  <li>5+ appearances → strong consistent trend</li>
+</ul>
+
+<p>This filtering ensures that early detections are not noise but part of a real underlying move.</p>
+</div>
+
+
+<div class="card">
+<h2>5. Score Progression (Improvement) Validates Growing Strength</h2>
+<p>The engine measures:</p>
+<p><span class="code">score_improvement = current_score - first_score</span></p>
+
+<p>This allows the enine to identify coins whose strength is <strong>increasing over time</strong>, even if they haven’t pumped hard yet.</p>
+
+<p class="badge good">Growing score = increasing buyer interest</p>
+<p class="badge warn">Stagnant score = low breakout probability</p>
+</div>
+
+
+<div class="card">
+<h2>6. Trend Strength + Health Score Reveal Early Hidden Winners</h2>
+<p>The engine combines:</p>
+<ul>
+  <li><span class="code">trend_strength</span></li>
+  <li><span class="code">health_score</span></li>
+  <li><span class="code">smart_confidence</span></li>
+</ul>
+
+<p>Together, these form a picture of:</p>
+<p class="highlight">“Is this coin silently building strength before it explodes?”</p>
+
+<p>If the answer is yes, the engine highlights it early.</p>
+</div>
+
+
+<div class="card">
+<h2>7. Order Block & Support Detection Spots Early Reversal Zones</h2>
+<p>this engine checks:</p>
+<ul>
+  <li><span class="code">order_block_alignment</span></li>
+  <li><span class="code">order_block_score</span></li>
+</ul>
+
+<p>If a coin is near a strong demand zone (support), this increases the probability of an early reversal and upward breakout.</p>
+
+<p>These signals often appear <strong>before the broader market notices the move</strong>.</p>
+</div>
+
+
+<div class="card">
+<h2>8. Global Market Context Adjustment Avoids False Early Signals</h2>
+<p>this engine uses:</p>
+<p><span class="code">market_context_score</span></p>
+
+<p>Weak global conditions are filtered out, ensuring that a coin must show *genuine strength*, not just noise.</p>
+
+<p class="badge good">Strong coin in weak market = early hidden gem</p>
+</div>
+
+<div class="card">
+<h2>9. top sectors dashboard ranking</h2>
+<p>this engine uses:</p>
+<p><span class="code">sectors top money inflow</span></p>
+<p><span class="code">sectors top change 24h</span></p>
+
+<p>This provides additional information on sectors or narratives that are trending.</p>
+
+</div>
+
+
+<div class="card">
+<h2>Final Summary</h2>
+<p>This engine is intentionally designed to detect coins <strong>before they reach the Top Gainer list</strong> because it analyzes:</p>
+
+<ul>
+  <li>early micro-volatility patterns</li>
+  <li>smart money accumulation signals</li>
+  <li>accelerating score & trend strength</li>
+  <li>consistent multi-appearance tracking</li>
+  <li>momentum lifecycle phases</li>
+  <li>support/order-block-based early reversals</li>
+</ul>
+
+<p class="highlight"><strong>In short: the engine identifies coins while they are still “quiet”, before they explode into public visibility.</strong></p>
+
+<p>This gives traders a significant timing advantage compared to waiting for the exchange’s top gainer list, which always arrives too late.</p>
+</div>
+
+</body>
+</html>

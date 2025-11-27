@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aerolink Bot — Documentation</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    /* Minimal overrides to keep it clean */
+    :root{--primary:#0b4a83;--muted:#6b7280}
+    .sidebar { width: 280px }
+    .content { max-width: 980px }
+    pre {background:#0f172a;color:#e6eef8;padding:1rem;border-radius:.5rem;overflow:auto}
+    .kbd {background:#eef2ff;padding:.15rem .5rem;border-radius:.35rem;border:1px solid rgba(15,23,42,.06)}
+    .tag {background:#eef2ff;color:var(--primary);padding:.15rem .5rem;border-radius:.35rem;font-weight:600}
+  </style>
+</head>
+<body class="antialiased bg-white text-gray-800">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="sidebar bg-white border-r border-gray-100 p-6 sticky top-0 h-screen">
+      <div class="mb-6">
+        <h1 class="text-xl font-bold" style="color:var(--primary)">Aerolink Bot Docs</h1>
+        <p class="text-sm text-gray-500">User Guide & Research • Modern clean</p>
+      </div>
+
+      <nav class="space-y-2 text-sm">
+        <a href="#overview" class="block py-2 px-3 rounded hover:bg-gray-50">Overview</a>
+        <a href="#setup" class="block py-2 px-3 rounded hover:bg-gray-50">Setup & Run</a>
+        <a href="#modules" class="block py-2 px-3 rounded hover:bg-gray-50">Modules & Architecture</a>
+        <a href="#algorithms" class="block py-2 px-3 rounded hover:bg-gray-50">Algorithms (Deep Dive)</a>
+        <a href="#scoring" class="block py-2 px-3 rounded hover:bg-gray-50">Scoring & Decision Logic</a>
+        <a href="#tracking" class="block py-2 px-3 rounded hover:bg-gray-50">Tracking & Alerts</a>
+        <a href="#market" class="block py-2 px-3 rounded hover:bg-gray-50">Market Context (BTC & F&G)</a>
+        <a href="#appendix" class="block py-2 px-3 rounded hover:bg-gray-50">Appendix — Config & Tuning</a>
+      </nav>
+
+      <div class="mt-6 border-t pt-4 text-xs text-gray-500">
+        <div>Format: <span class="tag">HTML (single-file docs)</span></div>
+        <div class="mt-2">Gaya: <strong>Campuran — teknis & naratif</strong></div>
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <main class="flex-1 p-10 overflow-y-auto">
+      <article class="content mx-auto">
+
+        <!-- Overview -->
+        <section id="overview" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Overview</h2>
+          <p class="text-gray-700 leading-relaxed">Aerolink Bot adalah sebuah sistem screening & monitoring koin kripto yang menggabungkan analisis teknikal (RSI, price momentum, order blocks), analisis volume (spike, acceleration), dan konteks pasar (BTC trend & Fear & Greed Index). Tujuan utamanya: mendeteksi koin dengan momentum kuat dan menyediakan sinyal/alert berkualitas untuk tim trading atau pengguna.</p>
+
+          <div class="mt-4 bg-gray-50 p-4 rounded border">
+            <h3 class="font-medium">Fitur utama</h3>
+            <ul class="list-disc ml-5 mt-2 text-gray-700">
+              <li>Screening otomatis multi-coin (batch processing & async)</li>
+              <li>Analisis multi-timeframe untuk BTC dan tiap koin</li>
+              <li>Order block detection (support/resistance) dengan konfirmasi volume</li>
+              <li>Smart confidence engine yang menggabungkan beberapa faktor</li>
+              <li>Pelacakan performa coin dari deteksi pertama hingga sekarang</li>
+              <li>Notifikasi via Telegram + logging</li>
+            </ul>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="font-medium">Arsitektur singkat</h3>
+            <ol class="list-decimal ml-5 mt-2 text-gray-700">
+              <li>Data Fetcher: ambil data dari CoinGecko, Binance, dan sumber market (F&G)</li>
+              <li>Preprocessing: bersihkan & normalisasi data (volume, price arrays)</li>
+              <li>Momentum Analyzer & OrderBlock Analyzer: hitung indikator teknikal</li>
+              <li>MarketContextAnalyzer: analisa BTC multi-tf & F&G</li>
+              <li>SmartConfidenceEngine: gabungkan metrik jadi satu confidence score</li>
+              <li>SmartTrackingSystem: simpan, evaluasi, dan kirim alert jika perlu</li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- Setup -->
+        <section id="setup" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Setup & Run</h2>
+          <p class="text-gray-700">Panduan singkat untuk menjalankan Aerolink Bot di server/VPS. Didesain agar mudah di-deploy: Python 3.10+, virtualenv, rekomendasi systemd/pm2/uvicorn untuk proses.</p>
+
+          <h3 class="mt-4 font-medium">1. Persyaratan</h3>
+          <ul class="ml-5 list-disc text-gray-700">
+            <li>Python 3.10 atau lebih baru</li>
+            <li>Virtual environment (venv/virtualenv)</li>
+            <li>Internet access (untuk panggil API CoinGecko / Binance / alternative.me)</li>
+            <li>API keys bila diperlukan (contoh: Binance private endpoints untuk order — bukan wajib untuk screening)</li>
+          </ul>
+
+          <h3 class="mt-4 font-medium">2. Instal dependencies</h3>
+          <pre><code>python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+# atau manual: requests aiohttp pandas numpy scikit-learn plotly fastapi uvicorn joblib</code></pre>
+
+          <h3 class="mt-4 font-medium">3. File & Environment</h3>
+          <p class="text-gray-700">Buat file <span class="kbd">.env</span> atau set environment variables sesuai konfigurasi. Contoh minimal:</p>
+          <pre><code>TELEGRAM_BOT_TOKEN=xxx
+TELEGRAM_CHAT_ID=-1001234567890
+BINANCE_API_KEY=
+BINANCE_API_SECRET=
+# Optional: override Config values untuk tuning</code></pre>
+
+          <h3 class="mt-4 font-medium">4. Menjalankan (mode simple)</h3>
+          <p class="text-gray-700">Untuk menjalankan bot sebagai proses tunggal (dev):</p>
+          <pre><code>source venv/bin/activate
+python bot.py</code></pre>
+
+          <h3 class="mt-4 font-medium">5. Menjalankan di production</h3>
+          <p class="text-gray-700">Rekomendasi: jalankan dengan <span class="tag">systemd</span> atau <span class="tag">supervisor</span>, dan jalankan FastAPI via uvicorn jika bot expose UI/websocket:</p>
+          <pre><code># contoh systemd (secara ringkas)
+[Unit]
+Description=Aerolink Bot
+After=network.target
+
+[Service]
+User=deploy
+WorkingDirectory=/srv/aerolink
+EnvironmentFile=/srv/aerolink/.env
+ExecStart=/srv/aerolink/venv/bin/python /srv/aerolink/bot.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+
+          <p class="mt-4 text-gray-600">Catatan: file `bot.py` versi yang kamu kirim memiliki built-in FastAPI + WebSocket; bila ingin gunakan UI di browser, jalankan uvicorn: <span class="kbd">uvicorn bot:app --host 0.0.0.0 --port 8000</span></p>
+        </section>
+
+        <!-- Modules -->
+        <section id="modules" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Modules & Architecture (Detail)</h2>
+          <p class="text-gray-700">Di sini kita bahas tiap modul utama dan perannya — pendekatan naratif teknis agar mudah dimengerti.</p>
+
+          <div class="mt-4">
+            <h3 class="font-medium">1. Data Layer (Fetcher)</h3>
+            <p class="text-gray-700">Tanggung jawab: ambil data harga, volume, kline, dan metadata coin. Memiliki mekanisme retry & rate-limit handling.</p>
+            <ul class="ml-5 list-disc text-gray-700">
+              <li>CoinGecko untuk daftar coin & market cap</li>
+              <li>Binance untuk klines (multi-interval) & volume</li>
+              <li>Alternative.me untuk Fear & Greed</li>
+            </ul>
+          </div>
+
+          <div class="mt-4">
+            <h3 class="font-medium">2. MarketContextAnalyzer</h3>
+            <p class="text-gray-700">Analisa kondisi pasar global — fokus pada BTC multi-timeframe trend dan F&amp;G index. Output: <code>market_regime</code> &amp; <code>market_score</code> yang digunakan downstream.</p>
+          </div>
+
+          <div class="mt-4">
+            <h3 class="font-medium">3. MomentumAnalyzer</h3>
+            <p class="text-gray-700">Menghitung volume acceleration, RSI (fast & slow), price momentum across periods, dan mendeteksi potensi reversal/divergence. Sangat penting untuk menentukan momentum_regime (STRONG_BULL/BULL/NEUTRAL/BEAR).</p>
+          </div>
+
+          <div class="mt-4">
+            <h3 class="font-medium">4. OrderBlockLiteAnalyzer</h3>
+            <p class="text-gray-700">Mendeteksi supply/demand zones (order blocks) menggunakan kombinasi swing high/low, price rejection, dan konfirmasi volume. Hasilnya berupa block list dengan <code>price</code>, <code>type</code>, <code>strength</code>, dan <code>volume_confirm</code>.</p>
+          </div>
+
+          <div class="mt-4">
+            <h3 class="font-medium">5. SmartConfidenceEngine</h3>
+            <p class="text-gray-700">Mesin yang menggabungkan faktor-faktor independen (market context, volume profile, momentum, order block alignment, liquidity) menjadi satu nilai confidence — digunakan untuk menentukan apakah sinyal layak dikirim ke Telegram / UI.</p>
+          </div>
+
+          <div class="mt-4">
+            <h3 class="font-medium">6. SmartTrackingSystem</h3>
+            <p class="text-gray-700">Mencatat penampakan koin, memperbarui metrics (performance_since_first, health_score), dan memberikan timeline messages. Juga bertugas cleanup otomatis dan proteksi top-performers.</p>
+          </div>
+        </section>
+
+        <!-- Algorithms -->
+        <section id="algorithms" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Algorithms — Deep Dive</h2>
+          <p class="text-gray-700">Di bagian ini kita kupas algoritma inti: bagaimana RSI dihitung, bagaimana volume acceleration bekerja, cara deteksi order block, dan logika momentum regime.</p>
+
+          <h3 class="mt-4 font-medium">RSI &amp; RSI Delta</h3>
+          <p class="text-gray-700">Bot menghitung dua RSI: <em>fast</em> (periode 8) dan <em>slow</em> (periode 14). RSI delta = fast - slow; delta dinormalisasi untuk menghasilkan indikator momentum singkat. Interpretasi:</p>
+          <ul class="ml-5 list-disc text-gray-700">
+            <li><strong>Delta &gt; 0.1</strong> → bias bullish</li>
+            <li><strong>Delta &lt; -0.1</strong> → bias bearish</li>
+            <li>Delta kecil (±0.1) → netral</li>
+          </ul>
+
+          <h3 class="mt-4 font-medium">Volume Acceleration &amp; Spike</h3>
+          <p class="text-gray-700">Volume acceleration dihitung dengan membandingkan rata-rata volume recent vs previous di beberapa window (3,5,8,12 period). Output: <code>volume_acceleration</code>, <code>volume_consistency</code>, dan <code>volume_surge</code>.</p>
+          <p class="text-gray-700">Contoh aturan:</p>
+          <ul class="ml-5 list-disc text-gray-700">
+            <li><strong>volume_acceleration &gt; 0.3</strong> dan <strong>volume_surge &gt; 2.0</strong> → indikator kuat bahwa ada partisipasi besar baru</li>
+            <li><strong>consistency</strong> menilai apakah spike berulang/teratur atau sekadar outlier</li>
+          </ul>
+
+          <h3 class="mt-4 font-medium">Momentum Regime Scoring</h3>
+          <p class="text-gray-700">Momentum regime merupakan agregasi dari kondisi volume, rsi_delta, dan price change (1h). Bot menghitung skor berbasis rule (tambah poin per kondisi terpenuhi) dan mengkategorikan ke: <em>STRONG_BULL, BULL, NEUTRAL_BULL, NEUTRAL, NEUTRAL_BEAR, BEAR</em>.</p>
+
+          <h3 class="mt-4 font-medium">Order Block Detection</h3>
+          <p class="text-gray-700">Order block detection berfokus pada menemukan swing lows/highs yang punya konfirmasi volume dan price rejection. Langkah utama:</p>
+          <ol class="list-decimal ml-5 text-gray-700">
+            <li>Identifikasi swing low/high (local min/max with neighbors)</li>
+            <li>Pastikan volume pada candle tersebut lebih tinggi dari percentile tertentu</li>
+            <li>Tentukan apakah ada price rejection (follow-through pada candle setelahnya)</li>
+            <li>Skor block berdasarkan volume ratio, price deviation, dan apakah block masih "recent"
+          </ol>
+
+          <h3 class="mt-4 font-medium">Health Score &amp; Trend Strength</h3>
+          <p class="text-gray-700">Health score adalah weighted average dari beberapa metrik: performance (keuntungan sejak deteksi), improvement score, volume trend, momentum trend, price trend, appearance_count, dan consistency. Bobot ditentukan di dalam fungsi _calculate_enhanced_health_score.</p>
+
+          <p class="text-gray-700">Trend strength dihitung dari kombinasi ukuran performance, volume strength, momentum score, RSI delta, dan appearance_count — memberikan satu angka yang digunakan untuk ranking trending dan top-performers.</p>
+        </section>
+
+        <!-- Scoring -->
+        <section id="scoring" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Scoring & Decision Logic</h2>
+          <p class="text-gray-700">Bagaimana bot memutuskan bahwa sebuah coin "bagus"? Prosesnya berlapis dan konservatif — bukan satu metrik saja.</p>
+
+          <h3 class="font-medium mt-4">1) Filters awal</h3>
+          <p class="text-gray-700">Sebelum analisis intensif, coin harus lolos filter dasar: market cap, volume, dan listing/availability di Binance (untuk preferensi likuiditas). Parameter ada di <code>Config</code> seperti <code>MARKET_CAP_MIN</code>, <code>VOLUME_MIN</code>, dan <code>BINANCE_RATIO_MIN</code>.</p>
+
+          <h3 class="font-medium mt-4">2) Perhitungan skor komposit</h3>
+          <p class="text-gray-700">Setelah lolos filter, bot menghitung beberapa skor independen:</p>
+          <ul class="ml-5 list-disc text-gray-700">
+            <li><strong>volume_profile_score</strong>: menggabungkan acceleration, surge, dan consistency</li>
+            <li><strong>momentum_score</strong>: dari rsi_delta + price momentum</li>
+            <li><strong>order_block_alignment</strong>: apakah harga dekat dengan demand block (support) atau near supply (resistance)</li>
+            <li><strong>market_context_score</strong>: bobot dari BTC trend &amp; Fear-Greed Index</li>
+          </ul>
+
+          <h3 class="font-medium mt-4">3) SmartConfidenceEngine</h3>
+          <p class="text-gray-700">Engine ini mengkombinasikan skor di atas menurut bobot (lihat <code>Config.CONFIDENCE_WEIGHTS</code>) dan menghasilkan <code>smart_confidence</code> antara 0–100. Threshold default dikontrol oleh <code>NEW_SIGNAL_MIN_CONFIDENCE</code> dan <code>NEW_SIGNAL_MIN_SCORE</code>.</p>
+
+          <h3 class="font-medium mt-4">4) Keputusan akhir & notifikasi</h3>
+          <p class="text-gray-700">Sinyal hanya dikirim bila:</p>
+          <ul class="ml-5 list-disc text-gray-700">
+            <li>smart_confidence &gt; threshold</li>
+            <li>health_score &gt; minimum (configurable)</li>
+            <li>momentum_regime adalah BULL atau STRONG_BULL (atau NEUTRAL_BULL dengan tambahan konfirmasi)</li>
+          </ul>
+
+          <p class="mt-3 text-gray-600">Jika terpenuhi → sinyal disimpan di <code>SmartTrackingSystem</code>, notifikasi Telegram dibentuk (termasuk alasan singkat: "RSI + Volume surge + BTC bullish"), dan chart/summary dipublikasikan ke UI jika tersedia.</p>
+        </section>
+
+        <!-- Tracking -->
+        <section id="tracking" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Tracking, Monitoring & Alerts</h2>
+          <p class="text-gray-700">Pelacakan adalah fitur yang membuat Aerolink Bot berguna — bukan sekadar sinyal sekali lalu. Tracking memenuhi 3 tujuan: observability, performance attribution, dan alerting.</p>
+
+          <h3 class="mt-4 font-medium">Lifecycle sebuah detection</h3>
+          <ol class="list-decimal ml-5 text-gray-700">
+            <li><strong>First detection</strong>: koin masuk ke <code>coin_tracking</code> dengan timestamp, first_price, first_score.</li>
+            <li><strong>Updates</strong>: setiap screening menghasilkan update messages — health_score, performance_since_first, dan status phase.</li>
+            <li><strong>Alerts</strong>: smart_alerts di-generate ketika kondisi tercapai (mis. performance &gt; 25%, volume surge &gt; 3x, health_score &gt; 80)</li>
+            <li><strong>Cleanup</strong>: tracking lama dihapus berdasarkan rules (age, health, appearance_count), dengan proteksi untuk top-performers.</li>
+          </ol>
+
+          <h3 class="mt-4 font-medium">Phase detection</h3>
+          <p class="text-gray-700">Phase seperti <em>ACCUMULATION, ACCELERATION, PARABOLIC, DISTRIBUTION, CAPITULATION, CONSOLIDATION</em> ditentukan dari kombinasi performance, volume_spike, dan appearance_count. Ini membantu tim trading memutuskan apakah entry adalah early-stage atau sudah terlalu late.</p>
+
+          <h3 class="mt-4 font-medium">Contoh pesan Telegram</h3>
+          <pre><code>🔔 NEW SIGNAL: XYZ
+Score: 78 | Confidence: 82
+Reason: Volume surge x3 + RSI Delta + BTC strong bull
+Phase: ACCELERATION | Health: 86
+Link: /signals/XYZ</code></pre>
+
+        </section>
+
+        <!-- Market Context -->
+        <section id="market" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Market Context — BTC multi-TF & Fear-Greed</h2>
+          <p class="text-gray-700">Market context membantu bot memahami probabilitas sinyal. Sinyal yang bagus di pasar bearish akan dinilai lebih konservatif dibandingkan yang sama di pasar bullish.</p>
+
+          <h3 class="mt-4 font-medium">BTC Multi-timeframe</h3>
+          <p class="text-gray-700">Bot mengambil klines untuk BTC pada tf 15m, 1h, 4h, 1d. Untuk tiap tf dihitung trend score (gabungan price change, momentum, volume confirmation). Score ter-weighted (lebih berat untuk higher tf) → final BTC trend.</p>
+
+          <h3 class="mt-4 font-medium">Fear &amp; Greed</h3>
+          <p class="text-gray-700">F&amp;G digunakan sebagai proxy sentimen. Contoh pengaruh:</p>
+          <ul class="ml-5 list-disc text-gray-700">
+            <li>F&amp;G &lt;= 25 → opportunistic buying (boost untuk contrarian)</li>
+            <li>F&amp;G 45–55 → netral</li>
+            <li>F&amp;G &gt; 75 → hati-hati (overbought crowd)</li>
+          </ul>
+
+          <p class="mt-3 text-gray-600">MarketContextAnalyzer menggabungkan BTC trend + F&amp;G + volume_confirmation menjadi <code>market_score</code> yang dipakai sebagai salah satu faktor utama oleh SmartConfidenceEngine.</p>
+        </section>
+
+        <!-- Appendix -->
+        <section id="appendix" class="mb-12">
+          <h2 class="text-2xl font-semibold mb-3">Appendix — Config &amp; Tuning</h2>
+          <p class="text-gray-700">Berikut ringkasan parameter yang sering di-tune. Default ada di kelas <code>Config</code> pada file <code>bot.py</code>.</p>
+
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="text-sm text-gray-600"><th class="p-2">Parameter</th><th class="p-2">Deskripsi</th><th class="p-2">Saran tuning</th></tr>
+            </thead>
+            <tbody>
+              <tr class="border-t"><td class="p-2 font-medium">MARKET_CAP_MIN</td><td class="p-2">Minimum market cap untuk diproses</td><td class="p-2">Naikkan untuk fokus pada coin lebih likuid</td></tr>
+              <tr class="border-t"><td class="p-2 font-medium">VOLUME_SPIKE_RATIO</td><td class="p-2">Ambang spike volume</td><td class="p-2">1.6 default; 2.0 untuk filter lebih ketat</td></tr>
+              <tr class="border-t"><td class="p-2 font-medium">RSI_OVERBOUGHT / RSI_OVERSOLD</td><td class="p-2">Ambang RSI</td><td class="p-2">Sesuaikan fast/slow untuk timeframe berbeda</td></tr>
+              <tr class="border-t"><td class="p-2 font-medium">AUTO_SCREENING_INTERVAL</td><td class="p-2">Interval screening otomatis (detik)</td><td class="p-2">3 menit default; 1—5 menit tergantung beban</td></tr>
+              <tr class="border-t"><td class="p-2 font-medium">NEW_SIGNAL_MIN_CONFIDENCE</td><td class="p-2">Threshold confidence untuk kirim notifikasi</td><td class="p-2">Default 60; naik ke 70 untuk false-positive lebih rendah</td></tr>
+            </tbody>
+          </table>
+
+          <h3 class="mt-4 font-medium">Praktik tuning</h3>
+          <ol class="list-decimal ml-5 text-gray-700">
+            <li>Mulai dari threshold konservatif (confidence 70) lalu turunkan jika ingin lebih agresif</li>
+            <li>Gunakan historikal test (backtest) pada periode 30–90 hari untuk melihat rasio sinyal vs performance</li>
+            <li>Monitor false positive rate pada Telegram channel yang terpisah</li>
+            <li>Jangan mengubah banyak parameter sekaligus</li>
+          </ol>
+        </section>
+
+        <footer class="mt-12 text-sm text-gray-500">Generated documentation • Aerolink Bot — Modern clean • Last updated: {auto}</footer>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>
