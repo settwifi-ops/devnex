@@ -186,7 +186,7 @@ class AITradingService
                 'Authorization' => 'Bearer ' . $this->openaiApiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(60)->post('https://api.openai.com/v1/chat/completions', [
-                'model' => 'gpt-4.1-mini',
+                'model' => 'gpt-4o-mini',
                 'messages' => [
                     [
                         'role' => 'system',
@@ -218,7 +218,7 @@ class AITradingService
     }
 
     /**
-     * ✅ ENHANCED: Validate decision dengan volume context
+     * ✅ ENHANCED: Validate decision dengan volume context - FIXED FOR BEARISH MARKET
      */
     private function isValidDecision($decision)
     {
@@ -229,12 +229,12 @@ class AITradingService
         }
 
         // ✅ UPDATE: Lower HOLD threshold juga
-        if ($decision['action'] === 'HOLD' && $decision['confidence'] < 40) { // ↓ dari 50
+        if ($decision['action'] === 'HOLD' && $decision['confidence'] < 40) {
             Log::info("⏭️ Skipping {$decision['symbol']} - Low confidence HOLD ({$decision['confidence']}%)");
             return false;
         }
 
-        // ✅ ENHANCED: MARKET CONTEXT VALIDATION WITH VOLUME AWARENESS
+        // ✅ ENHANCED: MARKET CONTEXT VALIDATION WITH VOLUME AWARENESS - FIXED
         $marketContext = $this->validateDecisionWithVolumeContext($decision);
         if (!$marketContext['valid']) {
             Log::info("⏭️ Skipping {$decision['symbol']} - Market context: " . $marketContext['reason']);
@@ -245,7 +245,7 @@ class AITradingService
     }
 
     /**
-     * ✅ ENHANCED: Validate decision dengan volume context
+     * ✅ ENHANCED: Validate decision dengan volume context - FIXED FOR BEARISH MARKET
      */
     private function validateDecisionWithVolumeContext($decision)
     {
@@ -259,9 +259,17 @@ class AITradingService
         $marketSentiment = $marketSummary->market_sentiment;
         $marketHealth = $marketSummary->market_health_score;
 
-        // Skip jika market health sangat buruk
+        // ✅ FIXED: Jangan block SELL di poor market health jika market bearish
         if ($marketHealth < 25) {
-            return ['valid' => false, 'reason' => "Very poor market health: {$marketHealth}/100"];
+            // Allow SELL actions in bearish market even with poor health
+            if ($action === 'SELL' && ($marketSentiment === 'bearish' || $marketSentiment === 'extremely_bearish')) {
+                Log::info("🎯 Allowing SELL in poor market health ({$marketHealth}) - Bearish market context");
+                // Continue dengan confidence check biasa
+            } 
+            // Block BUY dan non-aligned actions di poor market
+            else if ($action === 'BUY' || $action === 'HOLD') {
+                return ['valid' => false, 'reason' => "Very poor market health: {$marketHealth}/100 - Blocking BUY/HOLD"];
+            }
         }
 
         // ✅ UPDATE: Adjust confidence requirements untuk threshold 50
@@ -275,22 +283,35 @@ class AITradingService
         
         $hasVolumeSpike = $volumeRatio > $this->volumeSpikeThreshold;
         $hasBullishVolume = $hasVolumeSpike && $priceChangePercent > 0;
+        $hasBearishVolume = $hasVolumeSpike && $priceChangePercent < 0;
 
-        // ✅ UPDATE: Kurangi penalty karena threshold sudah rendah
-        if (($marketSentiment === 'bearish' && $action === 'BUY') ||
-            ($marketSentiment === 'bullish' && $action === 'SELL')) {
-            
-            if ($hasBullishVolume) {
-                $adjustedMinConfidence += 3; // ↓ dari 5 (karena threshold 50)
+        // ✅ FIXED: Kurangi penalty untuk SELL di bearish market
+        if ($marketSentiment === 'bearish' && $action === 'BUY') {
+            // BUY di bearish market - tetap tinggi threshold
+            $adjustedMinConfidence += 8;
+            Log::info("⚠️ BUY in bearish market - increased confidence requirement: {$adjustedMinConfidence}%");
+        } 
+        elseif ($marketSentiment === 'bullish' && $action === 'SELL') {
+            // SELL di bullish market - tinggi threshold  
+            $adjustedMinConfidence += 8;
+            Log::info("⚠️ SELL in bullish market - increased confidence requirement: {$adjustedMinConfidence}%");
+        }
+        // ✅ NEW: SELL di bearish market - BOOST confidence (bukan penalty)
+        elseif ($marketSentiment === 'bearish' && $action === 'SELL') {
+            // Volume alignment boost
+            if ($hasBearishVolume) {
+                $adjustedMinConfidence = max(45, $adjustedMinConfidence - 5);
+                Log::info("🎯 SELL in bearish market with bearish volume - reduced confidence requirement: {$adjustedMinConfidence}%");
             } else {
-                $adjustedMinConfidence += 5; // ↓ dari 10
+                $adjustedMinConfidence = max(48, $adjustedMinConfidence - 2);
+                Log::info("🎯 SELL in bearish market - reduced confidence requirement: {$adjustedMinConfidence}%");
             }
         }
 
-        // ✅ UPDATE: Boost untuk volume spike
+        // ✅ UPDATE: Boost untuk volume spike alignment
         if (($marketSentiment === 'bullish' && $action === 'BUY' && $hasBullishVolume) ||
-            ($marketSentiment === 'bearish' && $action === 'SELL' && $hasVolumeSpike && $priceChangePercent < 0)) {
-            $adjustedMinConfidence = max(45, $adjustedMinConfidence - 3); // ↓ dari 60
+            ($marketSentiment === 'bearish' && $action === 'SELL' && $hasBearishVolume)) {
+            $adjustedMinConfidence = max(45, $adjustedMinConfidence - 3);
             Log::info("🎯 Volume-trend alignment - reduced confidence requirement for {$decision['symbol']}");
         }
 
@@ -323,6 +344,7 @@ class AITradingService
         
         return $decision;
     }
+
     /**
      * ✅ ENHANCED: Build prompt dengan volume spike analysis
      */
@@ -460,24 +482,23 @@ class AITradingService
             $prompt .= "🚨 EXTREME VOLUME STRATEGY:\n";
             $prompt .= "• High conviction signals\n";
             $prompt .= "• Follow volume direction aggressively\n";
-            $prompt .= "• Minimum confidence: 50%\n"; // ↓ dari 65%
+            $prompt .= "• Minimum confidence: 50%\n";
         } elseif ($isVolumeSpike) {
             $prompt .= "📊 VOLUME SPIKE STRATEGY:\n";
             $prompt .= "• Strong directional signals\n";
             $prompt .= "• Validate with price confirmation\n";
-            $prompt .= "• Minimum confidence: 50%\n"; // ↓ dari 70%
+            $prompt .= "• Minimum confidence: 50%\n";
         } else {
             $prompt .= "📈 NORMAL VOLUME STRATEGY:\n";
             $prompt .= "• Standard technical analysis\n";
             $prompt .= "• Require stronger confirmation\n";
-            $prompt .= "• Minimum confidence: 55%\n"; // ↓ dari 75%
+            $prompt .= "• Minimum confidence: 55%\n";
         }
         
-        // ✅ UPDATE: Confidence adjustment rules
         $prompt .= "\nCONFIDENCE ADJUSTMENTS:\n";
-        $prompt .= "• Volume spike + trend alignment = +5-10% confidence\n"; // ↓ dari 10-15%
-        $prompt .= "• Extreme volume = +10-15% confidence\n"; // ↓ dari 15-20%
-        $prompt .= "• Volume disagreement = -5% confidence\n\n"; // ↓ dari 10%
+        $prompt .= "• Volume spike + trend alignment = +5-10% confidence\n";
+        $prompt .= "• Extreme volume = +10-15% confidence\n";
+        $prompt .= "• Volume disagreement = -5% confidence\n\n";
         
         $prompt .= "RESPONSE REQUIREMENTS:\n";
         $prompt .= "- Confidence: 0-100 based on signal strength AND volume confirmation\n";

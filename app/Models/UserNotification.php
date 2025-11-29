@@ -26,6 +26,6 @@ class UserNotification extends Model
 
     public function signal(): BelongsTo
     {
-        return $this->belongsTo(AISignal::class, 'ai_signal_id');
+        return $this->belongsTo(AiSignal::class, 'ai_signal_id');
     }
 }

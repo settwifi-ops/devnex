@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Log;
-use App\Models\AISignal;
+use App\Models\AiSignal;
 use App\Models\UserNotification;
 use App\Models\User;
 
@@ -36,7 +36,7 @@ Route::post('/push-signal', function (Request $request) {
         $action = $data['confidence'] >= 70 ? 'BUY' : 'SELL';
 
         // Simpan ke database AISignal
-        $aiSignal = AISignal::create([
+        $aiSignal = AiSignal::create([
             'symbol' => $data['symbol'],
             'name' => $data['name'],
             'action' => $action,

@@ -17,10 +17,10 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Jalankan command update sektor tiap 30 menit
-        $schedule->command('sectors:update')->everyMinute();
-        $schedule->command('signals:update-categories')->everyMinute();
-        $schedule->command('market:advanced-update')->everyMinute();
-        $schedule->command('market:update')->everyMinute();
+        $schedule->command('sectors:update')->everyFifteenMinutes();
+        $schedule->command('signals:update-categories')->everyThirtyMinutes();
+        $schedule->command('market:advanced-update')->everyFifteenMinutes();
+        $schedule->command('market:update')->everyFiveMinutes();
         $schedule->command('signals:fetch')
                  ->everyMinute()
                  ->appendOutputTo(storage_path('logs/auto_log.txt'));; 
@@ -28,10 +28,10 @@ class Kernel extends ConsoleKernel
                  ->everyMinute()
                  ->appendOutputTo(storage_path('logs/auto_log.txt'));;
         $schedule->command('signals:analyze --limit=20')
-                 ->everyMinute()
+                 ->everyFiveMinutes()
                  ->withoutOverlapping()
                  ->appendOutputTo(storage_path('logs/signal-analysis.log'));
-        $schedule->command('summary:generate-top')->everyMinute();
+        $schedule->command('summary:generate-top')->everyFiveMinutes();
         // 15-minute signal scan (hanya scan, tidak execute)
         // Auto PNL update setiap 15 menit
         $schedule->command('trading:auto-update-pnl')
@@ -45,7 +45,7 @@ class Kernel extends ConsoleKernel
 
         // Signal-based trading setiap 2 jam
         $schedule->command('signals:scan --execute')
-                 ->everyMinute()
+                 ->everyTenMinutes()
                  ->withoutOverlapping();
         // SL/TP Monitoring - setiap 30 detik (untuk manual SL/TP)
         $schedule->call(function () {

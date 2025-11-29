@@ -2,7 +2,7 @@
 
 namespace App\Events;
 
-use App\Models\AISignal;
+use App\Models\AiSignal;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -16,7 +16,7 @@ class NewAISignal implements ShouldBroadcast
     public $signal;
     public $userId;
 
-    public function __construct(AISignal $signal, $userId)
+    public function __construct(AiSignal $signal, $userId)
     {
         $this->signal = $signal;
         $this->userId = $userId;

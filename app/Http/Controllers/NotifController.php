@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AISignal;
+use App\Models\AiSignal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -17,7 +17,7 @@ class NotifController extends Controller
             $action = $request->confidence >= 70 ? 'BUY' : 'HOLD';
             
             // Cek apakah ada sinyal terbaru untuk coin yang sama dengan action yang sama
-            $existingSignal = AISignal::where('symbol', $request->symbol)
+            $existingSignal = AiSignal::where('symbol', $request->symbol)
                 ->where('action', $action)
                 ->orderBy('created_at', 'desc')
                 ->first();
@@ -37,7 +37,7 @@ class NotifController extends Controller
             }
 
             // Simpan ke database jika bukan duplikat
-            $signal = AISignal::create([
+            $signal = AiSignal::create([
                 'symbol' => $request->symbol,
                 'name' => $request->name,
                 'action' => $action,

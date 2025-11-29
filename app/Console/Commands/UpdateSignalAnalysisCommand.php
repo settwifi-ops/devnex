@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Services\TradingAnalysisService;
 use App\Services\OpenAIService;
+use App\Models\Signal;
+use Illuminate\Support\Facades\Log;
 
 class UpdateSignalAnalysisCommand extends Command
 {
@@ -29,26 +31,18 @@ class UpdateSignalAnalysisCommand extends Command
 
     public function handle()
     {
-
-        $limit = $this->option('limit');
-        
-        $this->info("Starting AI analysis for {$limit} signals...");
-        
-        // ✅ SEKARANG BISA PAKAI SERVICE DENGAN BENAR
-        $signals = $this->tradingAnalysisService->getSignalsNeedingUpdate($limit);        // Test OpenAI connection jika option dipilih
+        // Test OpenAI connection jika option dipilih
         if ($this->option('test')) {
             $this->testOpenAIConnection();
             return;
         }
 
-        $analysisService = new TradingAnalysisService();
-        
         $this->info('🔍 Scanning for signals needing AI analysis...');
 
         // Handle --all option
         if ($this->option('all')) {
             $this->info("🎯 Processing ALL signals (ignoring conditions)...");
-            $signals = $analysisService->getAllSignals($this->option('limit'));
+            $signals = $this->tradingAnalysisService->getAllSignals($this->option('limit'));
             
             if ($signals->isEmpty()) {
                 $this->info('✅ No signals found in database');
@@ -58,7 +52,7 @@ class UpdateSignalAnalysisCommand extends Command
             $this->info("📈 Processing {$signals->count()} signals...");
             
             $signalIds = $signals->pluck('id')->toArray();
-            $results = $analysisService->processSignalBatch($signalIds);
+            $results = $this->tradingAnalysisService->processSignalBatch($signalIds);
 
             $this->showResults($results);
             return;
@@ -66,17 +60,17 @@ class UpdateSignalAnalysisCommand extends Command
 
         // Handle specific symbol or ID
         if ($symbol = $this->option('symbol')) {
-            $this->processSpecificSymbol($analysisService, $symbol);
+            $this->processSpecificSymbol($symbol);
             return;
         }
 
         if ($id = $this->option('id')) {
-            $this->processSpecificId($analysisService, $id);
+            $this->processSpecificId($id);
             return;
         }
 
         // Batch process
-        $signals = $analysisService->getSignalsNeedingUpdate($this->option('limit'));
+        $signals = $this->tradingAnalysisService->getSignalsNeedingUpdate($this->option('limit'));
 
         if ($signals->isEmpty()) {
             $this->info('✅ No signals need analysis at this time');
@@ -87,7 +81,7 @@ class UpdateSignalAnalysisCommand extends Command
         $this->info("📈 Found {$signals->count()} signals needing analysis");
         
         $signalIds = $signals->pluck('id')->toArray();
-        $results = $analysisService->processSignalBatch($signalIds);
+        $results = $this->tradingAnalysisService->processSignalBatch($signalIds);
 
         $this->showResults($results);
     }
@@ -97,7 +91,8 @@ class UpdateSignalAnalysisCommand extends Command
         $this->info('🧪 Testing OpenAI Connection...');
         
         try {
-            $openAIService = new OpenAIService();
+            // Gunakan OpenAIService dari container Laravel
+            $openAIService = app(OpenAIService::class);
             $success = $openAIService->testConnection();
             
             if ($success) {
@@ -107,12 +102,12 @@ class UpdateSignalAnalysisCommand extends Command
                 $this->error('❌ OpenAI Connection: FAILED');
                 $this->info('💡 Check your API key and internet connection');
             }
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $this->error('❌ OpenAI Test Error: ' . $e->getMessage());
         }
     }
 
-    private function processSpecificSymbol($analysisService, $symbol)
+    private function processSpecificSymbol($symbol)
     {
         $this->info("🎯 Processing specific symbol: {$symbol}");
         
@@ -127,7 +122,7 @@ class UpdateSignalAnalysisCommand extends Command
             $this->info("Trying symbol format: '{$format}'");
             
             // Include inactive signals if --force flag
-            $signal = \App\Models\Signal::where('symbol', $format);
+            $signal = Signal::where('symbol', $format);
             
             if (!$this->option('force')) {
                 $signal->where('is_active_signal', true);
@@ -147,13 +142,13 @@ class UpdateSignalAnalysisCommand extends Command
                     $this->info("🔁 FORCE RE-ANALYSIS enabled");
                 }
                 
-                $success = $analysisService->processSignal($signal->id, $forceReanalyze);
+                $success = $this->tradingAnalysisService->processSignal($signal->id, $forceReanalyze);
                 
                 if ($success === true) {
                     $this->info("✅ Successfully analyzed {$signal->symbol}");
                     
                     // Show updated data
-                    $updatedSignal = \App\Models\Signal::find($signal->id);
+                    $updatedSignal = Signal::find($signal->id);
                     $this->showSignalAnalysis($updatedSignal);
                     return;
                 } elseif ($success === 'skipped') {
@@ -171,11 +166,11 @@ class UpdateSignalAnalysisCommand extends Command
         $this->showAvailableSymbols();
     }
 
-    private function processSpecificId($analysisService, $id)
+    private function processSpecificId($id)
     {
         $this->info("🎯 Processing specific signal ID: {$id}");
         
-        $signal = \App\Models\Signal::find($id);
+        $signal = Signal::find($id);
         
         if (!$signal) {
             $this->error("❌ Signal ID {$id} not found");
@@ -194,13 +189,13 @@ class UpdateSignalAnalysisCommand extends Command
             $this->info("🔁 FORCE RE-ANALYSIS enabled");
         }
         
-        $success = $analysisService->processSignal($id, $forceReanalyze);
+        $success = $this->tradingAnalysisService->processSignal($id, $forceReanalyze);
         
         if ($success === true) {
             $this->info("✅ Successfully analyzed signal ID: {$id}");
             
             // Show updated data
-            $updatedSignal = \App\Models\Signal::find($id);
+            $updatedSignal = Signal::find($id);
             $this->showSignalAnalysis($updatedSignal);
             
         } elseif ($success === 'skipped') {
@@ -229,7 +224,7 @@ class UpdateSignalAnalysisCommand extends Command
 
     private function showAvailableSymbols()
     {
-        $availableSymbols = \App\Models\Signal::where('is_active_signal', true)
+        $availableSymbols = Signal::where('is_active_signal', true)
             ->pluck('symbol')
             ->take(10)
             ->toArray();
@@ -237,7 +232,7 @@ class UpdateSignalAnalysisCommand extends Command
         if (!empty($availableSymbols)) {
             $this->info("\n🔍 Available active symbols: " . implode(', ', $availableSymbols));
         } else {
-            $allSymbols = \App\Models\Signal::pluck('symbol')
+            $allSymbols = Signal::pluck('symbol')
                 ->take(10)
                 ->toArray();
             $this->info("\n🔍 All symbols: " . implode(', ', $allSymbols));
@@ -257,7 +252,7 @@ class UpdateSignalAnalysisCommand extends Command
             $this->info("\n📋 Successful analyses:");
             foreach ($results['details'] as $signalId => $status) {
                 if ($status === 'success') {
-                    $signal = \App\Models\Signal::find($signalId);
+                    $signal = Signal::find($signalId);
                     $this->info("  ✅ {$signal->symbol} (ID: {$signalId})");
                 }
             }

@@ -10,30 +10,52 @@ class OpenAIService
 {
     private $apiKey;
     private $baseUrl = 'https://api.openai.com/v1/chat/completions';
+    private $isConfigured = false;
+    private static $warningLogged = false; // Static variable untuk cegah spam log
 
     public function __construct()
     {
         $this->apiKey = env('OPENAI_API_KEY');
         
-        if (!$this->apiKey) {
-            throw new Exception('OPENAI_API_KEY not found in .env file');
-       }
+        // Check if API key is properly configured
+        if (empty($this->apiKey) || $this->apiKey === 'sk-dummy-key-for-now' || strpos($this->apiKey, 'dummy') !== false) {
+            // Log warning hanya sekali, tidak setiap instantiation
+            if (!self::$warningLogged) {
+                Log::warning('OpenAI API Key not properly configured. Please check your .env file');
+                self::$warningLogged = true;
+            }
+            $this->isConfigured = false;
+            return;
+        }
+        
+        $this->isConfigured = true;
+    }
+
+    /**
+     * Check if OpenAI service is available
+     */
+    public function isAvailable()
+    {
+        return $this->isConfigured && !empty($this->apiKey);
     }
 
     /**
      * Analyze trading signal dengan AI - FIXED VERSION
      */
-    /**
-     * Analyze trading signal dengan PRE-CALCULATED levels - UPDATE METHOD INI
-     */
     public function analyzeTradingSignal($signalData, $candleData)
     {
+        // Jika OpenAI tidak configured, langsung return fallback tanpa spam log
+        if (!$this->isAvailable()) {
+            Log::info("🔄 OpenAI not configured, using fallback analysis for {$signalData->symbol}");
+            return $this->generateBetterFallbackAnalysis($signalData, $candleData);
+        }
+
         // === TAMBAHKIN 2 BARIS INI DI AWAL METHOD ===
         // CALCULATE levels dulu sebelum kirim ke AI
         $calculatedLevels = $this->calculateLevelsFromCandles($candleData, $signalData->current_price);
         Log::info("📊 Pre-calculated Levels - Support: {$calculatedLevels['support']}, Resistance: {$calculatedLevels['resistance']}");
 
-        $prompt = $this->buildTraderPrompt($signalData, $candleData);
+        $prompt = $this->buildTraderPrompt($signalData, $candleData, $calculatedLevels);
 
         try {
             Log::info("📡 Sending request to OpenAI for {$signalData->symbol}...");
@@ -42,7 +64,7 @@ class OpenAIService
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(60)->post($this->baseUrl, [
-                'model' => 'gpt-4.1-mini',
+                'model' => 'gpt-4o-mini',
                 'messages' => [
                     [
                         'role' => 'user',
@@ -88,7 +110,7 @@ class OpenAIService
     /**
      * Build prompt untuk AI dengan PRE-CALCULATED levels - UPDATE METHOD INI
      */
-    private function buildTraderPrompt($signalData, $candleData)
+    private function buildTraderPrompt($signalData, $candleData, $calculatedLevels)
     {
         $candleCount = count($candleData);
         $latestCandle = end($candleData);
@@ -97,10 +119,6 @@ class OpenAIService
         $latestHigh = $latestCandle[2] ?? $latestClose * 1.02;
         $latestLow = $latestCandle[3] ?? $latestClose * 0.98;
 
-        // === TAMBAHKIN 4 BARIS INI ===
-        // PRE-CALCULATE levels dulu (pakai algorithm improved)
-        $calculatedLevels = $this->calculateLevelsFromCandles($candleData, $signalData->current_price);
-        
         // Calculate recent price range
         $recentCandles = array_slice($candleData, -10);
         $highs = array_column($recentCandles, 2);
@@ -187,8 +205,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
                     $result['summary'] .= " " . $outlook;
                 }
             }
-            // === HAPUS/COMMENT parsing untuk Support/Resistance ===
-            // Biarkan AI tetap output, tapi kita ignore dan pakai calculated ones
+            // HAPUS parsing untuk Support/Resistance - kita pakai calculated ones
         }
 
         // Fallback probability extraction
@@ -198,8 +215,6 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
         }
 
         // NOTE: Support/Resistance akan di-set dari calculated levels di method analyzeTradingSignal
-        // Kita return tanpa support/resistance disini
-
         $mappedResult = [
             'summary' => $result['summary'] ?? 'Analysis in progress',
             'probability' => $result['probability'] ?? '50% neutral',
@@ -292,7 +307,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
     }
 
     /**
-     * Calculate IMPROVED support/resistance dari candle data - METHOD INI SUDAH ADA, TINGGI UPDATE LOGIC
+     * Calculate IMPROVED support/resistance dari candle data
      */
     private function calculateLevelsFromCandles($candleData, $currentPrice)
     {
@@ -340,7 +355,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
     }
 
     /**
-     * Find swing highs (peaks) dengan window - METHOD BARU
+     * Find swing highs (peaks) dengan window
      */
     private function findSwingHighs($candles, $window = 2)
     {
@@ -369,7 +384,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
     }
 
     /**
-     * Find swing lows (troughs) dengan window - METHOD BARU
+     * Find swing lows (troughs) dengan window
      */
     private function findSwingLows($candles, $window = 2)
     {
@@ -398,7 +413,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
     }
 
     /**
-     * Find significant levels by clustering nearby prices - METHOD BARU
+     * Find significant levels by clustering nearby prices
      */
     private function findSignificantLevels($levels, $type = 'support')
     {
@@ -445,7 +460,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
     }
 
     /**
-     * Get current relevant support level - METHOD BARU
+     * Get current relevant support level
      */
     private function getCurrentSupport($supportLevels, $currentPrice)
     {
@@ -480,7 +495,7 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
     }
 
     /**
-     * Get current relevant resistance level - METHOD BARU
+     * Get current relevant resistance level
      */
     private function getCurrentResistance($resistanceLevels, $currentPrice)
     {
@@ -519,6 +534,11 @@ Outlook: [1-2 sentence forward-looking statement with specific conditions and pr
      */
     public function testConnection()
     {
+        // Jika tidak configured, langsung return false tanpa spam
+        if (!$this->isAvailable()) {
+            return false;
+        }
+
         try {
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
