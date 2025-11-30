@@ -602,127 +602,158 @@
                 </div>
             </div>
         </div>
-        <!-- Open Positions Table - Clean Version -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-            <!-- Header -->
-            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50/80">
-                <div class="flex justify-between items-center">
+        <!-- Open Positions Table - Compact Version -->
+        <!-- Open Positions -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-100 overflow-hidden hover:shadow-3xl transition-all duration-500 mb-8">
+            <div class="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100/80">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900">Open Positions</h3>
-                        <p class="text-gray-600 text-sm mt-1">Active trading positions</p>
+                        <p class="text-gray-600 text-sm mt-1">Active trading positions managed by AI</p>
                     </div>
-                    <div class="text-sm text-gray-700 bg-white px-4 py-2 rounded-lg border border-gray-300 font-semibold">
-                        <span class="text-blue-600 font-bold">
-                            @if(isset($openPositions) && count($openPositions) > 0)
-                                {{ count($openPositions) }}
-                            @else
-                                0
-                            @endif
-                        </span> active positions
+                    <div class="text-sm text-gray-700 bg-white/80 px-4 py-2 rounded-xl border border-gray-200 font-semibold shadow-lg hover:shadow-xl transition-all duration-300">
+                        <span class="text-blue-600 font-bold">{{ $this->openPositionsCount }}</span> active positions
                     </div>
                 </div>
             </div>
             
-            <!-- Table Content -->
-            @if(isset($openPositions) && count($openPositions) > 0)
+            @if($this->openPositionsCount > 0)
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr class="text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
-                                <th class="px-4 py-3">Symbol & Type</th>
-                                <th class="px-4 py-3 hidden sm:table-cell">Quantity</th>
-                                <th class="px-4 py-3">Current Price</th>
-                                <th class="px-4 py-3">Floating P&L</th>
-                                <th class="px-4 py-3">Actions</th>
+                    <table class="w-full min-w-max text-sm">
+                        <thead class="bg-gradient-to-r from-gray-50 to-gray-100/80">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
+                                    Symbol
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden md:table-cell">
+                                    Avg Price
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden lg:table-cell">
+                                    Current
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden md:table-cell">
+                                    Investment
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
+                                    P&L
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden lg:table-cell">
+                                    SL/TP
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden sm:table-cell">
+                                    Holding
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
+                                    Actions
+                                </th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200">
+                        <tbody class="divide-y divide-gray-100">
                             @foreach($openPositions as $position)
-                            @php
-                                $isProfitable = ($position->floating_pnl ?? 0) >= 0;
-                                $positionType = $position->position_type ?? 'LONG';
-                            @endphp
-                            <tr class="hover:bg-gray-50/50 transition-colors">
-                                <!-- Symbol & Type -->
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-8 h-8 rounded-lg {{ $positionType === 'LONG' ? 'bg-green-500/20' : 'bg-red-500/20' }} flex items-center justify-center">
-                                            @if($positionType === 'LONG')
-                                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
-                                                </svg>
-                                            @else
-                                                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-                                                </svg>
-                                            @endif
+                                @php
+                                    $holdingHours = $position->opened_at->diffInHours(now());
+                                    $isProfitable = $position->floating_pnl >= 0;
+                                @endphp
+                                <tr class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-purple-50/50 transition-all duration-300 group cursor-pointer">
+                                    <!-- Symbol & Type -->
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 rounded-lg {{ $position->position_type === 'LONG' ? 'bg-green-500/20' : 'bg-red-500/20' }} flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
+                                                <i class="fas {{ $position->position_type === 'LONG' ? 'fa-arrow-up text-green-600' : 'fa-arrow-down text-red-600' }} text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <span class="font-bold text-gray-900 text-sm group-hover:text-blue-600 transition-colors duration-300">{{ $position->symbol }}</span>
+                                                <div class="text-xs text-gray-500 capitalize font-semibold">{{ strtolower($position->position_type) }}</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div class="font-bold text-gray-900">{{ $position->symbol ?? 'N/A' }}</div>
-                                            <div class="text-xs text-gray-500 capitalize">{{ strtolower($positionType) }}</div>
+                                    </td>
+                                    <!-- Avg Price -->
+                                    <td class="px-4 py-3 whitespace-nowrap hidden md:table-cell">
+                                        <span class="text-xs font-mono font-semibold text-gray-900">
+                                            ${{ number_format($position->avg_price, 4) }}
+                                        </span>
+                                    </td>
+                                    
+                                    <!-- Current Price -->
+                                    <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
+                                        <span class="text-xs font-mono font-semibold text-gray-900">
+                                            ${{ number_format($position->current_price, 4) }}
+                                        </span>
+                                    </td>
+                                    
+                                    <!-- Investment -->
+                                    <td class="px-4 py-3 whitespace-nowrap hidden md:table-cell">
+                                        <span class="text-xs font-mono font-semibold text-gray-900 bg-blue-100/50 px-2 py-1.5 rounded-md">
+                                            ${{ number_format($position->investment, 2) }}
+                                        </span>
+                                    </td>
+                                    
+                                    <!-- Floating P&L -->
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="flex flex-col space-y-1">
+                                            <span class="inline-flex items-center px-2 py-1.5 rounded-full text-xs font-bold transition-all duration-300 {{ $isProfitable ? 'bg-green-500/20 text-green-700 border border-green-200' : 'bg-red-500/20 text-red-700 border border-red-200' }} group-hover:shadow-md">
+                                                <i class="fas {{ $isProfitable ? 'fa-arrow-up mr-1' : 'fa-arrow-down mr-1' }} text-xs"></i>
+                                                ${{ number_format($position->floating_pnl, 2) }}
+                                            </span>
+                                            <span class="text-xs font-semibold {{ $isProfitable ? 'text-green-600' : 'text-red-600' }}">
+                                                {{ $position->pnl_percentage >= 0 ? '+' : '' }}{{ number_format($position->pnl_percentage, 2) }}%
+                                            </span>
                                         </div>
-                                    </div>
-                                </td>
-                                
-                                <!-- Quantity -->
-                                <td class="px-4 py-3 hidden sm:table-cell">
-                                    <span class="text-sm font-mono font-semibold text-gray-900 bg-gray-100/50 px-3 py-1 rounded">
-                                        {{ number_format($position->qty ?? 0, 6) }}
-                                    </span>
-                                </td>
-                                
-                                <!-- Current Price -->
-                                <td class="px-4 py-3">
-                                    <span class="text-sm font-mono font-semibold text-gray-900">
-                                        ${{ number_format($position->current_price ?? 0, 4) }}
-                                    </span>
-                                </td>
-                                
-                                <!-- Floating P&L -->
-                                <td class="px-4 py-3">
-                                    <div class="flex flex-col space-y-1">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold {{ $isProfitable ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700' }}">
-                                            @if($isProfitable)
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
-                                                </svg>
-                                            @else
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-                                                </svg>
-                                            @endif
-                                            ${{ number_format($position->floating_pnl ?? 0, 2) }}
-                                        </span>
-                                        <span class="text-xs font-semibold {{ $isProfitable ? 'text-green-600' : 'text-red-600' }}">
-                                            {{ ($position->pnl_percentage ?? 0) >= 0 ? '+' : '' }}{{ number_format($position->pnl_percentage ?? 0, 2) }}%
-                                        </span>
-                                    </div>
-                                </td>
-                                
-                                <!-- Actions -->
-                                <td class="px-4 py-3">
-                                    <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg transition-colors font-semibold flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                        <span class="hidden sm:inline">Close</span>
-                                    </button>
-                                </td>
-                            </tr>
+                                    </td>
+                                    
+                                    <!-- SL/TP -->
+                                    <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
+                                        <div class="space-y-1 text-xs">
+                                            <div class="flex items-center space-x-1">
+                                                <i class="fas fa-arrow-down text-red-500 text-xs"></i>
+                                                <span class="font-mono font-semibold">${{ $position->stop_loss ? number_format($position->stop_loss, 4) : '--' }}</span>
+                                            </div>
+                                            <div class="flex items-center space-x-1">
+                                                <i class="fas fa-arrow-up text-green-500 text-xs"></i>
+                                                <span class="font-mono font-semibold">${{ $position->take_profit ? number_format($position->take_profit, 4) : '--' }}</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    
+                                    <!-- Holding -->
+                                    <td class="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-xs font-semibold text-gray-900">{{ $this->getFormattedHoldingTime($position->opened_at) }}</span>  
+                                            <div class="w-2 h-2 {{ $holdingHours < 24 ? 'bg-green-500' : ($holdingHours < 72 ? 'bg-yellow-500' : 'bg-red-500') }} rounded-full shadow-sm"></div>
+                                        </div>
+                                    </td>
+                                    
+                                    <!-- Actions -->
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="flex space-x-1">
+                                            <button 
+                                                wire:click="closePosition({{ $position->id }})"
+                                                wire:confirm="Are you sure you want to close this {{ $position->position_type }} position for {{ $position->symbol }}?"
+                                                class="px-3 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-xs rounded-lg transition-all duration-300 font-semibold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center space-x-1"
+                                                title="Close Position">
+                                                <i class="fas fa-times text-xs"></i>
+                                                <span class="hidden sm:inline">Close</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
             @else
-                <!-- Empty State -->
-                <div class="text-center py-12">
-                    <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
+                <div class="text-center py-16">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tl from-purple-600/20 to-pink-500/20 rounded-full mb-6">
+                        <i class="fas fa-chart-line text-3xl text-gray-400"></i>
                     </div>
-                    <p class="text-gray-600 text-lg font-semibold mb-2">No open positions</p>
-                    <p class="text-gray-500 text-sm">When trading positions are available, they will appear here.</p>
+                    <p class="text-gray-500 text-base font-semibold mb-2">No open positions available.</p>
+                    <p class="text-gray-400 text-xs mb-6">When AI makes trading decisions, positions will appear here.</p>
+                    @if(!$portfolio->ai_trade_enabled)
+                        <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4 inline-flex items-center space-x-3">
+                            <i class="fas fa-exclamation-triangle text-orange-500 text-base"></i>
+                            <p class="text-orange-700 text-xs font-semibold">Enable AI Trading to start receiving positions</p>
+                        </div>
+                    @endif
                 </div>
             @endif
         </div>
