@@ -1,15 +1,18 @@
 <x-layouts.base>
-    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-100/30">
         <!-- Navigation Header -->
-        <nav class="bg-white shadow-sm border-b">
+        <nav class="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/60">
             <div class="container mx-auto px-4">
                 <div class="flex justify-between items-center py-4">
                     <!-- Logo/Brand -->
-                    <div class="flex items-center">
-                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
-                            <i class="fas fa-chart-line text-white"></i>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+                            <i class="fas fa-chart-line text-white text-lg"></i>
                         </div>
-                        <span class="text-xl font-bold text-gray-900">TradingPro</span>
+                        <div>
+                            <span class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">TradingPro</span>
+                            <p class="text-xs text-gray-500">Premium Subscription</p>
+                        </div>
                     </div>
 
                     <!-- User Actions -->
@@ -17,11 +20,11 @@
                         <!-- Dashboard Button -->
                         @if(auth()->user()->hasActiveTrial() || auth()->user()->hasActivePremium())
                             <a href="{{ route('dashboard') }}" 
-                               class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition duration-200 shadow-sm">
+                               class="flex items-center px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
                                 <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
                             </a>
                         @else
-                            <div class="flex items-center px-4 py-2 bg-gray-400 text-white font-medium rounded-lg cursor-not-allowed" 
+                            <div class="flex items-center px-6 py-2.5 bg-gray-400 text-white font-semibold rounded-xl cursor-not-allowed shadow-sm" 
                                  title="Upgrade to premium to access dashboard">
                                 <i class="fas fa-lock mr-2"></i>Dashboard
                             </div>
@@ -31,7 +34,7 @@
                         <form method="POST" action="{{ route('logout') }}" class="inline">
                             @csrf
                             <button type="submit" 
-                                    class="flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition duration-200 shadow-sm">
+                                    class="flex items-center px-6 py-2.5 bg-gradient-to-r from-gray-600 to-slate-700 hover:from-gray-700 hover:to-slate-800 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
                                 <i class="fas fa-sign-out-alt mr-2"></i>Logout
                             </button>
                         </form>
@@ -41,299 +44,339 @@
         </nav>
 
         <!-- Main Content -->
-        <div class="py-8">
+        <div class="py-12">
             <div class="container mx-auto px-4 max-w-7xl">
                 
                 <!-- Status & Profile Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
                     <!-- User Profile Card -->
                     <div class="lg:col-span-1">
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sticky top-8">
-                            <div class="flex items-center mb-5">
-                                <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                    <span class="text-white font-bold text-lg">{{ substr(auth()->user()->name, 0, 1) }}</span>
+                        <div class="bg-white/80 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200/50 p-6 sticky top-8">
+                            <!-- User Avatar & Info -->
+                            <div class="text-center mb-6">
+                                <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                    <span class="text-white font-bold text-2xl">{{ substr(auth()->user()->name, 0, 1) }}</span>
                                 </div>
-                                <div class="ml-3">
-                                    <h3 class="font-semibold text-gray-900 text-sm">{{ auth()->user()->name }}</h3>
-                                    <p class="text-xs text-gray-500 truncate max-w-[150px]">{{ auth()->user()->email }}</p>
-                                </div>
+                                <h3 class="font-bold text-gray-900 text-lg mb-1">{{ auth()->user()->name }}</h3>
+                                <p class="text-sm text-gray-500">{{ auth()->user()->email }}</p>
                             </div>
 
                             <!-- Subscription Status -->
-                            <div class="mb-5">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium text-gray-700">Subscription Status</span>
+                            <div class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200/50">
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="text-sm font-semibold text-gray-700">Status</span>
                                     <div class="flex items-center">
-                                        <div class="w-2 h-2 rounded-full bg-{{ auth()->user()->hasActiveTrial() ? 'yellow' : (auth()->user()->hasActivePremium() ? 'green' : 'gray') }}-500 mr-1"></div>
-                                        <span class="text-xs font-medium text-gray-600">{{ auth()->user()->getReadableStatus() }}</span>
+                                        <div class="w-2.5 h-2.5 rounded-full bg-{{ auth()->user()->hasActiveTrial() ? 'yellow' : (auth()->user()->hasActivePremium() ? 'green' : 'gray') }}-500 mr-2 animate-pulse"></div>
+                                        <span class="text-xs font-bold text-gray-600">{{ auth()->user()->getReadableStatus() }}</span>
                                     </div>
                                 </div>
                                 
                                 @if(auth()->user()->hasActiveTrial())
-                                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-xs font-medium text-yellow-800">Trial Period</span>
-                                            <span class="text-xs font-bold text-yellow-700">{{ auth()->user()->getRemainingTrialDays() }} days left</span>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between text-xs">
+                                            <span class="font-medium text-yellow-700">Trial Period</span>
+                                            <span class="font-bold text-yellow-700">{{ auth()->user()->getRemainingTrialDays() }} days left</span>
                                         </div>
-                                        <div class="w-full bg-yellow-200 rounded-full h-1.5 mt-2">
-                                            <div class="bg-yellow-500 h-1.5 rounded-full" style="width: {{ (auth()->user()->getRemainingTrialDays() / 14) * 100 }}%"></div>
+                                        <div class="w-full bg-yellow-200 rounded-full h-2">
+                                            <div class="bg-gradient-to-r from-yellow-400 to-amber-500 h-2 rounded-full transition-all duration-1000" 
+                                                 style="width: {{ (auth()->user()->getRemainingTrialDays() / 14) * 100 }}%"></div>
                                         </div>
                                     </div>
                                 @endif
                             </div>
 
                             <!-- Profile Update Form -->
-                            <h4 class="text-md font-semibold text-gray-900 mb-3 flex items-center">
-                                <i class="fas fa-user-edit text-blue-500 mr-2 text-sm"></i>
-                                Profile Settings
-                            </h4>
-                            
-                            <form id="profileForm" action="{{ route('subscription.update-profile') }}" method="POST">
-                                @csrf
-                                <div class="space-y-3">
+                            <div class="border-t border-gray-200/50 pt-6">
+                                <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                                    <i class="fas fa-user-cog text-blue-500 mr-3"></i>
+                                    Profile Settings
+                                </h4>
+                                
+                                <form id="profileForm" action="{{ route('subscription.update-profile') }}" method="POST" class="space-y-4">
+                                    @csrf
                                     <div>
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Full Name</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                                         <input type="text" name="name" value="{{ auth()->user()->name }}" 
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
+                                               class="w-full px-4 py-3 text-sm border border-gray-300/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all duration-300 bg-white/50 backdrop-blur-sm"
                                                placeholder="Your full name">
                                     </div>
                                     
                                     <div>
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Email Address</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
                                         <input type="email" name="email" value="{{ auth()->user()->email }}" 
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
+                                               class="w-full px-4 py-3 text-sm border border-gray-300/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all duration-300 bg-white/50 backdrop-blur-sm"
                                                placeholder="Your email">
                                     </div>
                                     
                                     <button type="submit" 
-                                            class="w-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white py-2 px-4 rounded-lg font-medium text-sm transition duration-200 shadow-sm">
-                                        <i class="fas fa-save mr-1"></i>Update Profile
+                                            class="w-full bg-gradient-to-r from-gray-700 to-slate-800 hover:from-gray-800 hover:to-slate-900 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                                        <i class="fas fa-save mr-2"></i>Update Profile
                                     </button>
-                                </div>
-                            </form>
+                                </form>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Upgrade Message & Plans -->
                     <div class="lg:col-span-3">
+                        <!-- Exchange Rate Info -->
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-2xl p-4 mb-8 backdrop-blur-sm">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-sync-alt text-blue-500 mr-3 text-lg"></i>
+                                    <span class="text-sm font-semibold text-blue-800">Real-time Exchange Rate</span>
+                                </div>
+                                <div id="exchangeRateInfo" class="text-sm text-blue-600 font-medium">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading USD to IDR rate...
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Upgrade Message for Non-Premium Users -->
                         @if(!auth()->user()->hasActiveTrial() && !auth()->user()->hasActivePremium())
-                            <div class="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-5 mb-6">
-                                <div class="flex items-start">
+                            <div class="bg-gradient-to-r from-amber-50 to-orange-50/80 border border-amber-200/60 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+                                <div class="flex items-start space-x-4">
                                     <div class="flex-shrink-0">
-                                        <div class="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
-                                            <i class="fas fa-exclamation-triangle text-white"></i>
+                                        <div class="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                                            <i class="fas fa-crown text-white"></i>
                                         </div>
                                     </div>
-                                    <div class="ml-4">
-                                        <h3 class="text-lg font-bold text-yellow-800 mb-1">Premium Access Required</h3>
-                                        <p class="text-yellow-700 text-sm">
-                                            You need an active premium subscription to access the dashboard features. 
-                                            Choose a plan below to unlock all premium trading tools and analytics.
+                                    <div class="flex-1">
+                                        <h3 class="text-xl font-bold text-amber-900 mb-2">Unlock Premium Features</h3>
+                                        <p class="text-amber-800/80 text-sm leading-relaxed">
+                                            Elevate your trading experience with advanced tools, real-time analytics, and professional insights. 
+                                            Choose your plan below and start your journey to successful trading.
                                         </p>
                                     </div>
                                 </div>
                             </div>
                         @endif
 
-                        <!-- Exchange Rate Info -->
-                        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <i class="fas fa-sync-alt text-blue-500 mr-2"></i>
-                                    <span class="text-sm font-medium text-blue-800">Real-time Exchange Rate</span>
-                                </div>
-                                <div id="exchangeRateInfo" class="text-xs text-blue-600">
-                                    Loading USD to IDR rate...
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Loading Modal -->
-                        <div id="loadingModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-                            <div class="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 text-center">
-                                <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <i class="fas fa-spinner fa-spin text-blue-600 text-2xl"></i>
+                        <div id="loadingModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity duration-300">
+                            <div class="bg-white/90 backdrop-blur-md rounded-3xl p-8 max-w-md w-full mx-4 text-center transform transition-all duration-500 scale-95 animate-pulse">
+                                <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                                    <i class="fas fa-spinner fa-spin text-white text-2xl"></i>
                                 </div>
-                                <h3 class="text-lg font-bold text-gray-900 mb-2">Processing Payment</h3>
-                                <p class="text-gray-600 text-sm">Please wait while we initialize your payment...</p>
+                                <h3 class="text-2xl font-bold text-gray-900 mb-3">Processing Payment</h3>
+                                <p class="text-gray-600 mb-2">Initializing secure payment gateway...</p>
+                                <p class="text-sm text-gray-500">You will be redirected shortly</p>
                             </div>
                         </div>
 
                         <!-- Pricing Plans -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
                             
                             <!-- MONTHLY PLAN -->
-                            <div class="bg-white rounded-2xl shadow-xl border border-blue-200 overflow-hidden transform hover:scale-105 transition duration-300">
-                                <div class="p-6">
-                                    <div class="text-center mb-6">
-                                        <span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full mb-4">
-                                            STARTER
-                                        </span>
-                                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Monthly</h3>
-                                        <div class="flex items-baseline justify-center mb-2">
-                                            <span class="text-4xl font-bold text-blue-600" id="monthlyUsd">$32</span>
+                            <div class="group relative">
+                                <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-600/10 rounded-3xl blur-lg group-hover:blur-xl transition-all duration-500"></div>
+                                <div class="relative bg-white/80 backdrop-blur-md rounded-3xl shadow-2xl border border-blue-200/30 overflow-hidden transform group-hover:scale-105 transition-all duration-500">
+                                    <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
+                                    <div class="p-8">
+                                        <div class="text-center mb-8">
+                                            <span class="inline-block bg-blue-100 text-blue-800 text-sm font-bold px-4 py-2 rounded-full mb-4 shadow-sm">
+                                                STARTER
+                                            </span>
+                                            <h3 class="text-3xl font-bold text-gray-900 mb-4">Monthly</h3>
+                                            <div class="flex items-baseline justify-center mb-3">
+                                                <span class="text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent" id="monthlyUsd">-</span>
+                                                <span class="text-gray-500 ml-2 text-lg">/month</span>
+                                            </div>
+                                            <p class="text-gray-600 font-semibold text-lg">Rp 490.000</p>
+                                            <p class="text-gray-400 text-sm mt-2">Perfect for getting started</p>
                                         </div>
-                                        <p class="text-gray-600 font-medium">Rp 490.000</p>
-                                        <p class="text-gray-400 text-sm mt-1">Billed monthly</p>
+
+                                        <!-- FEATURES -->
+                                        <ul class="space-y-4 mb-8">
+                                            <li class="flex items-center">
+                                                <i class="fas fa-check-circle text-green-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-medium">Real-time Trading Signals</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-check-circle text-green-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-medium">Advanced Chart Analysis</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-check-circle text-green-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-medium">AI Market Predictions</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-check-circle text-green-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-medium">Priority Email Support</span>
+                                            </li>
+                                        </ul>
+
+                                        <button type="button" 
+                                                onclick="processPayment('monthly')"
+                                                class="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105 payment-btn monthly-btn group">
+                                            <i class="fas fa-bolt mr-2 group-hover:animate-pulse"></i>Get Started Now
+                                        </button>
                                     </div>
-
-                                    <!-- FEATURES -->
-                                    <ul class="space-y-3 mb-6">
-                                        <li class="flex items-center">
-                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                            <span class="text-gray-700">Real-time Trading Signals</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                            <span class="text-gray-700">Advanced Chart Analysis</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                            <span class="text-gray-700">AI Market Predictions</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                            <span class="text-gray-700">Priority Support</span>
-                                        </li>
-                                    </ul>
-
-                                    <button type="button" 
-                                            onclick="processPayment('monthly')"
-                                            class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 transform hover:scale-105 shadow-lg payment-btn monthly-btn">
-                                        <i class="fas fa-bolt mr-2"></i>Get Started
-                                    </button>
                                 </div>
                             </div>
 
-                            <!-- 6 MONTHS PLAN -->
-                            <div class="bg-white rounded-2xl shadow-2xl border-2 border-green-500 relative transform hover:scale-105 transition duration-300">
-                                <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                                    <span class="bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg">
-                                        ⭐ MOST POPULAR
-                                    </span>
-                                </div>
-                                
-                                <div class="p-6 pt-10">
-                                    <div class="text-center mb-6">
-                                        <h3 class="text-2xl font-bold text-gray-900 mb-3">6 Months</h3>
-                                        <div class="flex items-baseline justify-center mb-2">
-                                            <span class="text-4xl font-bold text-green-600" id="sixmonthsUsd">$155</span>
-                                        </div>
-                                        <p class="text-gray-600 font-medium">Rp 2.500.000</p>
-                                        <div class="bg-green-50 border border-green-200 rounded-lg p-2 mt-3">
-                                            <span class="text-green-700 font-semibold text-sm">Save 15%</span>
-                                        </div>
+                            <!-- 6 MONTHS PLAN - FEATURED -->
+                            <div class="group relative">
+                                <div class="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500"></div>
+                                <div class="relative bg-gradient-to-br from-white to-emerald-50/80 backdrop-blur-md rounded-3xl shadow-3xl border-2 border-emerald-400/50 overflow-hidden transform group-hover:scale-105 transition-all duration-500">
+                                    <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                                        <span class="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold px-6 py-3 rounded-full shadow-2xl animate-pulse">
+                                            ⭐ MOST POPULAR
+                                        </span>
                                     </div>
+                                    <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-green-500 to-emerald-400"></div>
+                                    
+                                    <div class="p-8 pt-12">
+                                        <div class="text-center mb-8">
+                                            <span class="inline-block bg-emerald-100 text-emerald-800 text-sm font-bold px-4 py-2 rounded-full mb-4 shadow-sm">
+                                                PROFESSIONAL
+                                            </span>
+                                            <h3 class="text-3xl font-bold text-gray-900 mb-4">6 Months</h3>
+                                            <div class="flex items-baseline justify-center mb-3">
+                                                <span class="text-5xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent" id="6monthsUsd">-</span>
+                                                <span class="text-gray-500 ml-2 text-lg">/6 months</span>
+                                            </div>
+                                            <p class="text-gray-600 font-semibold text-lg">Rp 2.485.000</p>
+                                            <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-emerald-200 rounded-2xl p-3 mt-4">
+                                                <span class="text-emerald-700 font-bold text-sm">💰 Save 20% vs Monthly</span>
+                                            </div>
+                                        </div>
 
-                                    <!-- FEATURES -->
-                                    <ul class="space-y-3 mb-6">
-                                        <li class="flex items-center">
-                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Everything in Monthly</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-star text-yellow-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Portfolio Management</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-star text-yellow-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Risk Analysis Tools</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-crown text-purple-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">VIP Support Channel</span>
-                                        </li>
-                                    </ul>
+                                        <!-- FEATURES -->
+                                        <ul class="space-y-4 mb-8">
+                                            <li class="flex items-center">
+                                                <i class="fas fa-check-circle text-emerald-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Everything in Monthly</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-star text-yellow-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Portfolio Management</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-star text-yellow-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Risk Analysis Tools</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-crown text-purple-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">VIP Support Channel</span>
+                                            </li>
+                                        </ul>
 
-                                    <button type="button" 
-                                            onclick="processPayment('6months')"
-                                            class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 transform hover:scale-105 shadow-lg payment-btn sixmonths-btn">
-                                        <i class="fas fa-rocket mr-2"></i>Get Premium
-                                    </button>
+                                        <button type="button" 
+                                                onclick="processPayment('6months')"
+                                                class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105 payment-btn 6months-btn group">
+                                            <i class="fas fa-rocket mr-2 group-hover:animate-bounce"></i>Get Premium Access
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- YEARLY PLAN -->
-                            <div class="bg-white rounded-2xl shadow-xl border border-purple-200 overflow-hidden transform hover:scale-105 transition duration-300">
-                                <div class="p-6">
-                                    <div class="text-center mb-6">
-                                        <span class="inline-block bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full mb-4">
-                                            PRO
-                                        </span>
-                                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Yearly</h3>
-                                        <div class="flex items-baseline justify-center mb-2">
-                                            <span class="text-4xl font-bold text-purple-600" id="yearlyUsd">$300</span>
+                            <div class="group relative">
+                                <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-600/10 rounded-3xl blur-lg group-hover:blur-xl transition-all duration-500"></div>
+                                <div class="relative bg-white/80 backdrop-blur-md rounded-3xl shadow-2xl border border-purple-200/30 overflow-hidden transform group-hover:scale-105 transition-all duration-500">
+                                    <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-400"></div>
+                                    <div class="p-8">
+                                        <div class="text-center mb-8">
+                                            <span class="inline-block bg-purple-100 text-purple-800 text-sm font-bold px-4 py-2 rounded-full mb-4 shadow-sm">
+                                                ENTERPRISE
+                                            </span>
+                                            <h3 class="text-3xl font-bold text-gray-900 mb-4">Yearly</h3>
+                                            <div class="flex items-baseline justify-center mb-3">
+                                                <span class="text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent" id="yearlyUsd">-</span>
+                                                <span class="text-gray-500 ml-2 text-lg">/year</span>
+                                            </div>
+                                            <p class="text-gray-600 font-semibold text-lg">Rp 4.850.000</p>
+                                            <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-3 mt-4">
+                                                <span class="text-purple-700 font-bold text-sm">🎯 Save 35% vs Monthly</span>
+                                            </div>
                                         </div>
-                                        <p class="text-gray-600 font-medium">Rp 4.850.000</p>
-                                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-2 mt-3">
-                                            <span class="text-purple-700 font-semibold text-sm">Save 30%</span>
-                                        </div>
+
+                                        <!-- FEATURES -->
+                                        <ul class="space-y-4 mb-8">
+                                            <li class="flex items-center">
+                                                <i class="fas fa-check-circle text-purple-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Everything in Professional</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-gem text-purple-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Custom Indicators</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-gem text-purple-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Dedicated Account Manager</span>
+                                            </li>
+                                            <li class="flex items-center">
+                                                <i class="fas fa-gift text-pink-500 text-lg mr-4"></i>
+                                                <span class="text-gray-700 font-bold">Early Feature Access</span>
+                                            </li>
+                                        </ul>
+
+                                        <button type="button" 
+                                                onclick="processPayment('yearly')"
+                                                class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105 payment-btn yearly-btn group">
+                                            <i class="fas fa-crown mr-2 group-hover:animate-pulse"></i>Go Pro Now
+                                        </button>
                                     </div>
-
-                                    <!-- FEATURES -->
-                                    <ul class="space-y-3 mb-6">
-                                        <li class="flex items-center">
-                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Everything in 6 Months</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-gem text-purple-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Custom Indicators</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-gem text-purple-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Dedicated Account Manager</span>
-                                        </li>
-                                        <li class="flex items-center">
-                                            <i class="fas fa-gift text-red-500 mr-3"></i>
-                                            <span class="text-gray-700 font-semibold">Early Feature Access</span>
-                                        </li>
-                                    </ul>
-
-                                    <button type="button" 
-                                            onclick="processPayment('yearly')"
-                                            class="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 transform hover:scale-105 shadow-lg payment-btn yearly-btn">
-                                        <i class="fas fa-crown mr-2"></i>Go Pro
-                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Features Grid -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                            <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-                                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <i class="fas fa-bolt text-blue-600 text-xl"></i>
-                                </div>
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2">Lightning Fast</h4>
-                                <p class="text-gray-600 text-sm">Real-time data with minimal latency</p>
+                        <!-- Features Showcase -->
+                        <div class="bg-gradient-to-br from-white to-blue-50/30 rounded-3xl shadow-2xl border border-gray-200/50 p-12 backdrop-blur-sm">
+                            <div class="text-center mb-12">
+                                <h2 class="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                                    Why Traders Choose Us
+                                </h2>
+                                <p class="text-gray-600 text-lg max-w-2xl mx-auto">
+                                    Join thousands of successful traders who trust our platform for their trading journey
+                                </p>
                             </div>
 
-                            <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <i class="fas fa-shield-alt text-green-600 text-xl"></i>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                <div class="text-center group">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                        <i class="fas fa-bolt text-white text-xl"></i>
+                                    </div>
+                                    <h4 class="text-xl font-bold text-gray-900 mb-2">Lightning Fast</h4>
+                                    <p class="text-gray-600 text-sm">Real-time data with sub-second latency</p>
                                 </div>
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2">Secure & Reliable</h4>
-                                <p class="text-gray-600 text-sm">Bank-level security guaranteed</p>
-                            </div>
 
-                            <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-                                <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                                <div class="text-center group">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                        <i class="fas fa-shield-alt text-white text-xl"></i>
+                                    </div>
+                                    <h4 class="text-xl font-bold text-gray-900 mb-2">Bank-Level Security</h4>
+                                    <p class="text-gray-600 text-sm">Military-grade encryption & protection</p>
                                 </div>
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2">Advanced Analytics</h4>
-                                <p class="text-gray-600 text-sm">AI-powered insights and predictions</p>
+
+                                <div class="text-center group">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                        <i class="fas fa-brain text-white text-xl"></i>
+                                    </div>
+                                    <h4 class="text-xl font-bold text-gray-900 mb-2">AI Powered</h4>
+                                    <p class="text-gray-600 text-sm">Advanced machine learning algorithms</p>
+                                </div>
+
+                                <div class="text-center group">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                        <i class="fas fa-headset text-white text-xl"></i>
+                                    </div>
+                                    <h4 class="text-xl font-bold text-gray-900 mb-2">24/7 Support</h4>
+                                    <p class="text-gray-600 text-sm">Dedicated support team always ready</p>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Payment Security Notice -->
-                        <div class="mt-8 text-center">
-                            <div class="inline-flex items-center bg-gray-50 rounded-2xl px-6 py-4 border border-gray-200">
-                                <i class="fas fa-lock text-green-600 text-xl mr-3"></i>
+                        <!-- Payment Security -->
+                        <div class="text-center mt-12">
+                            <div class="inline-flex items-center bg-gradient-to-r from-gray-50 to-slate-100 rounded-2xl px-8 py-6 border border-gray-200/60 shadow-lg backdrop-blur-sm">
+                                <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                                    <i class="fas fa-lock text-white text-lg"></i>
+                                </div>
                                 <div class="text-left">
-                                    <h4 class="font-semibold text-gray-900 text-sm">Secure Payment Processing</h4>
-                                    <p class="text-xs text-gray-600">All payments are encrypted and processed securely via Midtrans</p>
+                                    <h4 class="font-bold text-gray-900 text-lg">Secure Payment Processing</h4>
+                                    <p class="text-gray-600 text-sm">All payments are encrypted and processed securely via Midtrans</p>
                                 </div>
                             </div>
                         </div>
@@ -347,20 +390,105 @@
         // Global variables
         let currentOrderId = null;
         let currentPlanType = null;
+        let exchangeRate = null;
 
-        // Harga dalam IDR (tanpa titik) - HARGA BARU
+        // Harga dalam IDR (tanpa titik)
         const planPrices = {
             'monthly': 490000,      // 490 ribu
-            '6months': 2500000,     // 2.5 juta
+            '6months': 2485000,     // 2.5 juta
             'yearly': 4850000       // 4.85 juta
         };
 
-        // Harga USD fixed (dengan rate 1 USD = 15,300 IDR)
-        const usdPrices = {
-            'monthly': 32,
-            '6months': 155,
-            'yearly': 300
-        };
+        // Get real exchange rate from API
+        async function getExchangeRate() {
+            try {
+                console.log('🌐 Fetching real exchange rate...');
+                
+                // Gunakan API gratis dari ExchangeRate-API
+                const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch exchange rate');
+                }
+                
+                const data = await response.json();
+                const usdToIdr = data.rates.IDR;
+                
+                console.log('💱 Real exchange rate:', usdToIdr);
+                return usdToIdr;
+                
+            } catch (error) {
+                console.error('❌ Exchange rate API error:', error);
+                
+                // Fallback: coba API lain (currency-api.com)
+                try {
+                    console.log('🔄 Trying fallback API...');
+                    const fallbackResponse = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+                    const fallbackData = await fallbackResponse.json();
+                    const fallbackRate = fallbackData.usd.idr;
+                    console.log('💱 Fallback exchange rate:', fallbackRate);
+                    return fallbackRate;
+                } catch (fallbackError) {
+                    console.error('❌ Fallback API also failed:', fallbackError);
+                    
+                    // Final fallback: fixed rate berdasarkan market
+                    const fixedRate = 15600; // Rate reasonable berdasarkan market
+                    console.log('🛠️ Using fixed rate:', fixedRate);
+                    return fixedRate;
+                }
+            }
+        }
+
+        // Convert IDR to USD
+        function convertIdrToUsd(idrAmount, rate) {
+            return idrAmount / rate;
+        }
+
+        // Format USD currency
+        function formatUsd(amount) {
+            return '$' + amount.toFixed(2);
+        }
+
+        // Update USD prices based on real exchange rate
+        async function updateUsdPrices() {
+            try {
+                const rate = await getExchangeRate();
+                exchangeRate = rate;
+                
+                // Update exchange rate info
+                document.getElementById('exchangeRateInfo').innerHTML = 
+                    `1 USD = Rp ${Math.round(rate).toLocaleString('id-ID')}`;
+                
+                // Update prices for each plan
+                updatePlanUsdPrice('monthly', planPrices.monthly, rate);
+                updatePlanUsdPrice('6months', planPrices['6months'], rate);
+                updatePlanUsdPrice('yearly', planPrices.yearly, rate);
+                
+                console.log('✅ USD prices updated with real exchange rate');
+                
+            } catch (error) {
+                console.error('❌ Failed to update USD prices:', error);
+                
+                // Use reasonable fixed prices if API fails
+                document.getElementById('exchangeRateInfo').innerHTML = 
+                    '1 USD ≈ Rp 15,600 (Market Rate)';
+                
+                // Set reasonable USD prices based on market rate
+                document.getElementById('monthlyUsd').textContent = '$31.41';
+                document.getElementById('6months').textContent = '$160.26';
+                document.getElementById('yearlyUsd').textContent = '$310.90';
+            }
+        }
+
+        // Update individual plan USD price
+        function updatePlanUsdPrice(planType, idrAmount, rate) {
+            const usdAmount = convertIdrToUsd(idrAmount, rate);
+            const usdElement = document.getElementById(planType + 'Usd');
+            
+            if (usdElement) {
+                usdElement.textContent = formatUsd(usdAmount);
+            }
+        }
 
         // Main payment processing function
         function processPayment(planType) {
@@ -469,45 +597,22 @@
 
         // Show success message and redirect
         function showSuccessMessage() {
-            alert('Payment successful! Redirecting to dashboard...');
+            alert('🎉 Payment successful! Redirecting to dashboard...');
             setTimeout(() => {
                 window.location.href = '{{ route("payment.finish") }}?status_code=200&order_id=' + currentOrderId;
-            }, 1000);
+            }, 1500);
         }
 
         // Show pending message
         function showPendingMessage() {
-            alert('Payment is pending. Please complete the payment process. You will be notified once payment is confirmed.');
+            alert('⏳ Payment is pending. Please complete the payment process. You will be notified once payment is confirmed.');
             resetAllButtons();
         }
 
         // Show error message
         function showErrorMessage(message) {
-            alert(message || 'Payment failed. Please try again.');
+            alert('❌ ' + (message || 'Payment failed. Please try again.'));
             resetAllButtons();
-        }
-
-        // Get USD to IDR exchange rate (simulated)
-        async function getExchangeRate() {
-            // Simulate API call with fixed rate
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve(15300); // 1 USD = 15,300 IDR
-                }, 500);
-            });
-        }
-
-        // Update exchange rate info
-        async function updateExchangeRate() {
-            try {
-                const rate = await getExchangeRate();
-                document.getElementById('exchangeRateInfo').innerHTML = 
-                    `1 USD = Rp ${rate.toLocaleString('id-ID')}`;
-            } catch (error) {
-                console.error('Exchange rate error:', error);
-                document.getElementById('exchangeRateInfo').innerHTML = 
-                    '1 USD ≈ Rp 15,300';
-            }
         }
 
         // Modal functions
@@ -541,8 +646,11 @@
                 btn.setAttribute('data-original-text', btn.innerHTML);
             });
 
-            // Update exchange rate
-            updateExchangeRate();
+            // Load real exchange rate and update prices
+            updateUsdPrices();
+
+            // Refresh exchange rate every 5 minutes
+            setInterval(updateUsdPrices, 300000);
 
             // Load Midtrans Snap.js
             loadMidtransScript();
@@ -550,7 +658,6 @@
 
         // Load Midtrans Snap script
         function loadMidtransScript() {
-            // Cek apakah script sudah dimuat
             if (window.snap) {
                 console.log('📜 Midtrans Snap already loaded');
                 return;
