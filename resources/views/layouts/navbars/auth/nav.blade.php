@@ -2,19 +2,28 @@
 <nav class="relative flex flex-wrap items-center justify-between px-0 py-2 mx-6 transition-all shadow-none duration-250 ease-soft-in rounded-2xl lg:flex-nowrap lg:justify-start" navbar-main navbar-scroll="true">
   <div class="flex items-center justify-between w-full px-4 py-1 mx-auto flex-wrap-inherit">
     
-    <!-- Running Text Section - AI Decisions -->
-    <div class="flex items-center flex-1 min-w-0 mr-4" style="max-width: calc(100% - 320px);">
-      <div class="relative overflow-hidden w-full bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl px-6 py-3 border border-blue-200 shadow-sm">
+    <!-- Running Text Section - AI Decisions (Transparent) -->
+    <div class="flex items-center flex-1 min-w-0 lg:mr-4" style="max-width: calc(100% - 320px);">
+      <div class="relative overflow-hidden w-full bg-transparent rounded-xl px-4 lg:px-6 py-2 lg:py-3">
         <div class="flex items-center">
-          <div class="flex-shrink-0 mr-4">
-            <div class="relative w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
-              <i class="fas fa-exchange-alt text-white text-sm"></i>
-              <div class="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+          <!-- Icon Exchange yang bisa diklik untuk mobile menu -->
+          <button id="mobile-menu-button" class="flex-shrink-0 mr-3 lg:mr-4 lg:hidden" onclick="toggleMobileSidebar()">
+            <div class="relative w-6 h-6 lg:w-8 lg:h-8 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-300">
+              <i class="fas fa-exchange-alt text-white text-xs lg:text-sm"></i>
+              <div class="absolute -top-1 -right-1 w-2 h-2 lg:w-3 lg:h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+            </div>
+          </button>
+
+          <!-- Icon Exchange normal untuk desktop -->
+          <div class="flex-shrink-0 mr-3 lg:mr-4 hidden lg:block">
+            <div class="relative w-6 h-6 lg:w-8 lg:h-8 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <i class="fas fa-exchange-alt text-white text-xs lg:text-sm"></i>
+              <div class="absolute -top-1 -right-1 w-2 h-2 lg:w-3 lg:h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
             </div>
           </div>
           
           <div class="relative overflow-hidden flex-1">
-            <div id="ai-running-text" class="text-sm font-medium text-gray-800 whitespace-nowrap">
+            <div id="ai-running-text" class="text-xs lg:text-sm font-medium text-gray-800 whitespace-nowrap">
               @php
                 $navbarController = new \App\Http\Controllers\NavbarController();
                 $navbarData = $navbarController->getNavbarData();
@@ -22,19 +31,19 @@
               @endphp
               
               @if(count($aiDecisions) > 0)
-                <div class="flex space-x-8 animate-marquee">
+                <div class="flex space-x-4 lg:space-x-8 animate-marquee">
                   @foreach($aiDecisions as $decision)
-                    <div class="flex items-center space-x-3 bg-white/80 backdrop-blur-sm rounded-lg px-4 py-2 shadow-sm border border-gray-200">
-                      <span class="font-bold text-gray-900 text-xs">{{ $decision->symbol }}</span>
+                    <div class="flex items-center space-x-2 lg:space-x-3 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1 lg:px-4 lg:py-2 border border-white/20 shadow-sm flex-shrink-0">
+                      <span class="font-bold text-gray-800 text-xs">{{ $decision->symbol }}</span>
                       <div class="flex items-center space-x-1">
-                        <span class="w-2 h-2 rounded-full {{ $decision->action === 'BUY' ? 'bg-green-500' : ($decision->action === 'SELL' ? 'bg-red-500' : 'bg-yellow-500') }}"></span>
+                        <span class="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full {{ $decision->action === 'BUY' ? 'bg-green-500' : ($decision->action === 'SELL' ? 'bg-red-500' : 'bg-yellow-500') }}"></span>
                         <span class="text-xs font-semibold {{ $decision->getActionColor() }}">{{ $decision->action }}</span>
                       </div>
-                      <div class="flex items-center space-x-1">
+                      <div class="hidden sm:flex items-center space-x-1">
                         <i class="fas fa-bullseye text-blue-500 text-xs"></i>
                         <span class="text-xs font-mono font-bold text-green-600">{{ $decision->getFormattedConfidence() }}</span>
                       </div>
-                      <div class="flex items-center space-x-1">
+                      <div class="hidden md:flex items-center space-x-1">
                         <i class="fas fa-dollar-sign text-gray-500 text-xs"></i>
                         <span class="text-xs font-mono font-bold text-blue-600">{{ $decision->getFormattedPrice() }}</span>
                       </div>
@@ -42,13 +51,13 @@
                   @endforeach
                 </div>
               @else
-                <div class="flex items-center space-x-4 text-gray-600">
-                  <div class="flex items-center space-x-2">
-                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span class="text-sm font-semibold">AI Trading System Active</span>
+                <div class="flex items-center space-x-2 lg:space-x-4 text-gray-600">
+                  <div class="flex items-center space-x-1 lg:space-x-2">
+                    <div class="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span class="text-xs lg:text-sm font-semibold">AI Trading System Active</span>
                   </div>
-                  <span class="text-gray-400">•</span>
-                  <span class="text-sm">Monitoring markets in real-time</span>
+                  <span class="text-gray-400 hidden lg:inline">•</span>
+                  <span class="text-xs lg:text-sm hidden sm:inline">Monitoring markets in real-time</span>
                 </div>
               @endif
             </div>
@@ -56,7 +65,6 @@
         </div>
       </div>
     </div>
-
     <!-- Notifications & User Actions -->
     <div class="flex items-center justify-end" style="min-width: 320px;">
       <ul class="flex flex-row justify-end pl-0 mb-0 list-none items-center space-x-2">
@@ -331,6 +339,98 @@
 <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
 
 <script>
+// Mobile Sidebar Toggle Function
+function toggleMobileSidebar() {
+    const sidebar = document.querySelector('.interactive-sidebar');
+    if (sidebar) {
+        sidebar.classList.toggle('mobile-open');
+        
+        // Add overlay when sidebar is open
+        if (sidebar.classList.contains('mobile-open')) {
+            createOverlay();
+        } else {
+            removeOverlay();
+        }
+    }
+}
+
+function createOverlay() {
+    // Remove existing overlay if any
+    removeOverlay();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'sidebar-overlay';
+    overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden';
+    overlay.onclick = closeMobileSidebar;
+    
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+}
+
+function removeOverlay() {
+    const overlay = document.getElementById('sidebar-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    document.body.style.overflow = '';
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.querySelector('.interactive-sidebar');
+    if (sidebar) {
+        sidebar.classList.remove('mobile-open');
+    }
+    removeOverlay();
+}
+
+// Add responsive styles for mobile sidebar
+const mobileSidebarStyles = `
+@media (max-width: 1200px) {
+    .interactive-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+    }
+    
+    .interactive-sidebar.mobile-open {
+        transform: translateX(0);
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.3);
+    }
+    
+    #sidebar-overlay {
+        backdrop-filter: blur(4px);
+    }
+}
+
+/* Ensure sidebar is above other content */
+.interactive-sidebar {
+    z-index: 999;
+}
+`;
+
+// Add styles to document
+const styleSheet = document.createElement('style');
+styleSheet.textContent = mobileSidebarStyles;
+document.head.appendChild(styleSheet);
+
+// Close sidebar when pressing escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeMobileSidebar();
+    }
+});
+
+// Close sidebar when clicking on nav links in mobile
+document.addEventListener('DOMContentLoaded', function() {
+    const navLinks = document.querySelectorAll('.interactive-sidebar .nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth < 1200) {
+                closeMobileSidebar();
+            }
+        });
+    });
+});
+
 window.pusherInstance = null;
 window.aiSignalManager = null;
 window.tradeNotificationManager = null;

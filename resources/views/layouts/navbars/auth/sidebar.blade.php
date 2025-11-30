@@ -289,46 +289,10 @@
         <li class="w-full mt-4 section-divider">
           <h6
             class="{{ (Request::is('rtl') ? 'pr-6 mr-2' : 'pl-6 ml-2') }} font-bold leading-tight uppercase text-size-xs opacity-60 section-title">
-            Manage
+            Documentation
             <!-- Animated underline -->
             <div class="section-underline w-8 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mt-1 transition-all duration-500"></div>
           </h6>
-        </li>
-
-        <!-- Virtual Reality dengan efek futuristik -->
-        <li class="mt-0.5 w-full nav-item">
-          <a class="nav-link py-2.7 text-size-sm ease-nav-brand my-0 mx-4 flex items-center whitespace-nowrap px-4 transition-all duration-300 relative overflow-hidden
-              {{ (Request::is('virtual-reality') ? 'shadow-soft-xl rounded-lg bg-white font-semibold text-slate-700 active' : '') }}"
-            href="{{ url('virtual-reality') }}">
-            
-            <div class="ripple-container absolute inset-0 overflow-hidden rounded-lg pointer-events-none"></div>
-            <div class="hover-bg absolute inset-0 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 rounded-lg opacity-0 transition-opacity duration-300"></div>
-
-            <div
-              class="{{ (Request::is('virtual-reality') ? ' bg-gradient-fuchsia' : '') }} shadow-soft-2xl mr-2 flex h-8 w-8 items-center justify-center rounded-lg bg-white bg-center stroke-0 text-center xl:p-2.5 relative z-10 icon-wrapper">
-              
-              <div class="icon-bg absolute inset-0 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 opacity-0 transition-all duration-300"></div>
-              
-              <!-- VR Icon dengan efek khusus -->
-              <div class="relative z-10 vr-icon-container">
-                <i style="font-size: 1rem;"
-                  class="fas fa-vr-cardboard text-center {{ (Request::is('virtual-reality') ? 'text-white' : 'text-dark') }} icon-fa"
-                  aria-hidden="true"></i>
-              </div>
-              
-              <!-- Glow Effect untuk VR -->
-              <div class="absolute -inset-1 bg-cyan-500 rounded-lg blur opacity-0 group-hover:opacity-30 transition-all duration-500"></div>
-              
-              <div class="active-indicator absolute -right-1 -top-1 w-2 h-2 bg-green-500 rounded-full opacity-0 transition-opacity duration-300"></div>
-            </div>
-            
-            <span
-              class="{{ (Request::is('rtl') ? 'mr-1' : 'ml-1') }} duration-300 opacity-100 pointer-events-none ease-soft relative z-10 nav-text">Virtual Reality</span>
-              
-            <div class="nav-arrow absolute right-4 opacity-0 transform translate-x-2 transition-all duration-300">
-              <i class="fas fa-chevron-right text-size-xs"></i>
-            </div>
-          </a>
         </li>
 
         <!-- Documentation dengan efek profesional -->
@@ -375,50 +339,7 @@
       </ul>
     </div>
     
-    <!-- Sidebar Footer dengan Interactive Elements -->
-    <div class="sidebar-footer p-4 border-t border-gray-200 mt-auto">
-      <div class="user-profile flex items-center space-x-3 cursor-pointer group relative p-2 rounded-lg transition-all duration-300 hover:bg-gray-50">
-        <div class="relative">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold relative overflow-hidden user-avatar">
-            <span>U</span>
-            <!-- Online Status Indicator -->
-            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white online-indicator"></div>
-          </div>
-          <!-- Pulse Animation -->
-          <div class="absolute inset-0 rounded-full bg-green-500 opacity-0 group-hover:opacity-30 group-hover:animate-ping transition-all duration-1000"></div>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-size-sm font-semibold text-gray-800 truncate user-name">User Name</p>
-          <p class="text-size-xs text-gray-500 truncate user-role">Administrator</p>
-        </div>
-        <div class="transform transition-transform duration-300 group-hover:rotate-180">
-          <i class="fas fa-chevron-down text-size-xs text-gray-400"></i>
-        </div>
-        
-        <!-- Dropdown Menu (akan muncul saat hover) -->
-        <div class="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 opacity-0 invisible transform translate-y-2 transition-all duration-300 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 z-20 user-dropdown">
-          <div class="py-2">
-            <a href="{{ url('user-profile') }}" class="flex items-center px-4 py-2 text-size-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
-              <i class="fas fa-user-circle mr-3 text-gray-400"></i>
-              My Profile
-            </a>
-            <a href="#" class="flex items-center px-4 py-2 text-size-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
-              <i class="fas fa-cog mr-3 text-gray-400"></i>
-              Settings
-            </a>
-            <a href="#" class="flex items-center px-4 py-2 text-size-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
-              <i class="fas fa-bell mr-3 text-gray-400"></i>
-              Notifications
-            </a>
-            <hr class="my-2">
-            <a href="#" class="flex items-center px-4 py-2 text-size-sm text-red-600 hover:bg-red-50 transition-colors duration-200">
-              <i class="fas fa-sign-out-alt mr-3"></i>
-              Logout
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+
   </aside>
 
   <!-- end sidenav -->

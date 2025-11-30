@@ -453,7 +453,7 @@
                     @if(count($topSignals) > 0)
                     <div class="relative">
                         <!-- Current Signal Card -->
-                        <a href="{{ route('ai-decisions.show', $topSignals[$currentTopSignalIndex]['symbol']) }}" class="block group signal-item">
+                        <a href="{{ route('portfolio') }}" class="block group signal-item">
                             <!-- Ripple Effect Container -->
                             <div class="ripple-container absolute inset-0 overflow-hidden rounded-xl pointer-events-none"></div>
                             
