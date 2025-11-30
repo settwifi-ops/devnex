@@ -136,297 +136,205 @@
                             </div>
                         @endif
 
-                        <!-- Payment Instructions Modal -->
-                        <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-                            <div class="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h3 class="text-xl font-bold text-gray-900">Complete Your Payment</h3>
-                                    <button onclick="closePaymentModal()" class="text-gray-400 hover:text-gray-600">
-                                        <i class="fas fa-times text-lg"></i>
-                                    </button>
+                        <!-- Exchange Rate Info -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-sync-alt text-blue-500 mr-2"></i>
+                                    <span class="text-sm font-medium text-blue-800">Real-time Exchange Rate</span>
                                 </div>
-                                <div id="paymentContent">
-                                    <!-- Payment instructions will be loaded here -->
+                                <div id="exchangeRateInfo" class="text-xs text-blue-600">
+                                    Loading USD to IDR rate...
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Credit Card Payment Modal -->
-                        <div id="creditCardModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-                            <div class="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
-                                <div class="flex justify-between items-center mb-6">
-                                    <h3 class="text-xl font-bold text-gray-900">Credit Card Payment</h3>
-                                    <button onclick="closeCreditCardModal()" class="text-gray-400 hover:text-gray-600">
-                                        <i class="fas fa-times text-lg"></i>
-                                    </button>
+                        <!-- Loading Modal -->
+                        <div id="loadingModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                            <div class="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 text-center">
+                                <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i class="fas fa-spinner fa-spin text-blue-600 text-2xl"></i>
                                 </div>
-                                
-                                <!-- Credit Card Form yang Sederhana -->
-                                <div id="creditCardContent">
-                                    <div id="creditCardHeader" class="text-center mb-6">
-                                        <!-- Header akan diisi secara dinamis -->
-                                    </div>
-
-                                    <div class="bg-blue-50 rounded-lg p-4 mb-6">
-                                        <div class="flex items-center justify-center mb-3">
-                                            <i class="fas fa-credit-card text-blue-500 text-2xl mr-3"></i>
-                                            <div>
-                                                <div class="font-semibold text-blue-800">Secure Credit Card Payment</div>
-                                                <div class="text-sm text-blue-600">Auto-detect Visa/Mastercard</div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Credit Card Icons -->
-                                        <div class="flex justify-center space-x-4 mt-3">
-                                            <div class="w-10 h-6 bg-blue-600 rounded flex items-center justify-center">
-                                                <span class="text-white text-xs font-bold">VISA</span>
-                                            </div>
-                                            <div class="w-10 h-6 bg-red-600 rounded flex items-center justify-center">
-                                                <span class="text-white text-xs font-bold">MC</span>
-                                            </div>
-                                            <div class="w-10 h-6 bg-orange-500 rounded flex items-center justify-center">
-                                                <span class="text-white text-xs font-bold">JCB</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Security Badges -->
-                                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                                        <div class="flex items-center justify-center space-x-6">
-                                            <div class="flex items-center">
-                                                <i class="fas fa-lock text-green-500 mr-2"></i>
-                                                <span class="text-xs text-gray-600">SSL Secure</span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-shield-alt text-blue-500 mr-2"></i>
-                                                <span class="text-xs text-gray-600">3D Secure</span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-user-shield text-purple-500 mr-2"></i>
-                                                <span class="text-xs text-gray-600">PCI DSS</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="text-center text-sm text-gray-600 mb-6">
-                                        <p>Your card will be automatically detected as Visa, Mastercard, or JCB</p>
-                                        <p class="text-xs text-gray-500 mt-1">Supported by all major Indonesian banks</p>
-                                    </div>
-
-                                    <button type="button" 
-                                            id="creditCardSubmit"
-                                            onclick="processCreditCardPayment()"
-                                            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 px-6 rounded-lg font-semibold text-lg transition duration-200 shadow-lg">
-                                        <i class="fas fa-lock mr-2"></i>Proceed to Secure Payment
-                                    </button>
-
-                                    <div class="text-center mt-4">
-                                        <p class="text-xs text-gray-500">
-                                            You will be redirected to secure payment page
-                                        </p>
-                                    </div>
-                                </div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-2">Processing Payment</h3>
+                                <p class="text-gray-600 text-sm">Please wait while we initialize your payment...</p>
                             </div>
                         </div>
 
                         <!-- Pricing Plans -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             
                             <!-- MONTHLY PLAN -->
-                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition duration-300">
-                                <div class="text-center mb-5">
-                                    <h3 class="text-xl font-bold text-gray-900 mb-2">Monthly</h3>
-                                    <div class="flex items-baseline justify-center mb-2">
-                                        <span class="text-3xl font-bold text-blue-600">$17.99</span>
+                            <div class="bg-white rounded-2xl shadow-xl border border-blue-200 overflow-hidden transform hover:scale-105 transition duration-300">
+                                <div class="p-6">
+                                    <div class="text-center mb-6">
+                                        <span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full mb-4">
+                                            STARTER
+                                        </span>
+                                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Monthly</h3>
+                                        <div class="flex items-baseline justify-center mb-2">
+                                            <span class="text-4xl font-bold text-blue-600" id="monthlyUsd">$32</span>
+                                        </div>
+                                        <p class="text-gray-600 font-medium">Rp 490.000</p>
+                                        <p class="text-gray-400 text-sm mt-1">Billed monthly</p>
                                     </div>
-                                    <p class="text-gray-500 text-sm">≈ Rp 299.000</p>
-                                    <p class="text-gray-400 text-xs mt-1">Billed monthly</p>
+
+                                    <!-- FEATURES -->
+                                    <ul class="space-y-3 mb-6">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                                            <span class="text-gray-700">Real-time Trading Signals</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                                            <span class="text-gray-700">Advanced Chart Analysis</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                                            <span class="text-gray-700">AI Market Predictions</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                                            <span class="text-gray-700">Priority Support</span>
+                                        </li>
+                                    </ul>
+
+                                    <button type="button" 
+                                            onclick="processPayment('monthly')"
+                                            class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 transform hover:scale-105 shadow-lg payment-btn monthly-btn">
+                                        <i class="fas fa-bolt mr-2"></i>Get Started
+                                    </button>
                                 </div>
-
-                                <!-- FEATURES -->
-                                <ul class="space-y-2.5 mb-5">
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-check text-green-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700">Full Premium Access</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-check text-green-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700">Real-time Signals</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-check text-green-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700">AI Analysis Tools</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-check text-green-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700">Priority Support</span>
-                                    </li>
-                                </ul>
-
-                                <!-- PAYMENT METHOD SELECTION -->
-                                <div class="mb-5">
-                                    <label class="block text-xs font-semibold text-gray-700 mb-2">Payment Method:</label>
-                                    <div class="space-y-2">
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition duration-200 payment-option" data-plan="monthly">
-                                            <input type="radio" name="payment_method_monthly" value="qris" class="mr-2 text-blue-600" checked>
-                                            <i class="fas fa-qrcode text-blue-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">QRIS</span>
-                                            <span class="ml-auto text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Instant</span>
-                                        </label>
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition duration-200 payment-option" data-plan="monthly">
-                                            <input type="radio" name="payment_method_monthly" value="va" class="mr-2 text-blue-600">
-                                            <i class="fas fa-university text-purple-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">Virtual Account</span>
-                                        </label>
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition duration-200 payment-option" data-plan="monthly">
-                                            <input type="radio" name="payment_method_monthly" value="credit_card" class="mr-2 text-blue-600">
-                                            <i class="fas fa-credit-card text-orange-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">Credit Card</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <button type="button" 
-                                        onclick="processPayment('monthly')"
-                                        class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 px-4 rounded-lg font-semibold text-sm transition duration-200 shadow-sm payment-btn monthly-btn">
-                                    <i class="fas fa-bolt mr-1"></i>Get Started
-                                </button>
                             </div>
 
                             <!-- 6 MONTHS PLAN -->
-                            <div class="bg-white rounded-xl shadow-md border-2 border-green-500 p-5 relative">
-                                <div class="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                                    <span class="bg-gradient-to-r from-green-500 to-green-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                            <div class="bg-white rounded-2xl shadow-2xl border-2 border-green-500 relative transform hover:scale-105 transition duration-300">
+                                <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                                    <span class="bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg">
                                         ⭐ MOST POPULAR
                                     </span>
                                 </div>
                                 
-                                <div class="text-center mb-5">
-                                    <h3 class="text-xl font-bold text-gray-900 mb-2">6 Months</h3>
-                                    <div class="flex items-baseline justify-center mb-2">
-                                        <span class="text-3xl font-bold text-green-600">$89.99</span>
+                                <div class="p-6 pt-10">
+                                    <div class="text-center mb-6">
+                                        <h3 class="text-2xl font-bold text-gray-900 mb-3">6 Months</h3>
+                                        <div class="flex items-baseline justify-center mb-2">
+                                            <span class="text-4xl font-bold text-green-600" id="sixmonthsUsd">$155</span>
+                                        </div>
+                                        <p class="text-gray-600 font-medium">Rp 2.500.000</p>
+                                        <div class="bg-green-50 border border-green-200 rounded-lg p-2 mt-3">
+                                            <span class="text-green-700 font-semibold text-sm">Save 15%</span>
+                                        </div>
                                     </div>
-                                    <p class="text-gray-500 text-sm">≈ Rp 1.497.000</p>
-                                    <p class="text-green-600 font-semibold text-xs mt-1">Save 15%</p>
+
+                                    <!-- FEATURES -->
+                                    <ul class="space-y-3 mb-6">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Everything in Monthly</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-star text-yellow-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Portfolio Management</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-star text-yellow-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Risk Analysis Tools</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-crown text-purple-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">VIP Support Channel</span>
+                                        </li>
+                                    </ul>
+
+                                    <button type="button" 
+                                            onclick="processPayment('6months')"
+                                            class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 transform hover:scale-105 shadow-lg payment-btn sixmonths-btn">
+                                        <i class="fas fa-rocket mr-2"></i>Get Premium
+                                    </button>
                                 </div>
-
-                                <!-- FEATURES -->
-                                <ul class="space-y-2.5 mb-5">
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-check text-green-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700">Everything in Monthly</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-star text-yellow-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700 font-medium">Advanced Analytics</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-star text-yellow-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700 font-medium">Portfolio Optimization</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-crown text-purple-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700 font-medium">VIP Support</span>
-                                    </li>
-                                </ul>
-
-                                <!-- PAYMENT METHOD SELECTION -->
-                                <div class="mb-5">
-                                    <label class="block text-xs font-semibold text-gray-700 mb-2">Payment Method:</label>
-                                    <div class="space-y-2">
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-green-50 cursor-pointer transition duration-200 payment-option" data-plan="6months">
-                                            <input type="radio" name="payment_method_6months" value="qris" class="mr-2 text-green-600" checked>
-                                            <i class="fas fa-qrcode text-green-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">QRIS</span>
-                                            <span class="ml-auto text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Instant</span>
-                                        </label>
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-green-50 cursor-pointer transition duration-200 payment-option" data-plan="6months">
-                                            <input type="radio" name="payment_method_6months" value="va" class="mr-2 text-green-600">
-                                            <i class="fas fa-university text-purple-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">Virtual Account</span>
-                                        </label>
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-green-50 cursor-pointer transition duration-200 payment-option" data-plan="6months">
-                                            <input type="radio" name="payment_method_6months" value="credit_card" class="mr-2 text-green-600">
-                                            <i class="fas fa-credit-card text-orange-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">Credit Card</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <button type="button" 
-                                        onclick="processPayment('6months')"
-                                        class="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 px-4 rounded-lg font-semibold text-sm transition duration-200 shadow-sm payment-btn sixmonths-btn">
-                                    <i class="fas fa-rocket mr-1"></i>Get Premium
-                                </button>
                             </div>
 
                             <!-- YEARLY PLAN -->
-                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition duration-300">
-                                <div class="text-center mb-5">
-                                    <h3 class="text-xl font-bold text-gray-900 mb-2">Yearly</h3>
-                                    <div class="flex items-baseline justify-center mb-2">
-                                        <span class="text-3xl font-bold text-purple-600">$149.99</span>
+                            <div class="bg-white rounded-2xl shadow-xl border border-purple-200 overflow-hidden transform hover:scale-105 transition duration-300">
+                                <div class="p-6">
+                                    <div class="text-center mb-6">
+                                        <span class="inline-block bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full mb-4">
+                                            PRO
+                                        </span>
+                                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Yearly</h3>
+                                        <div class="flex items-baseline justify-center mb-2">
+                                            <span class="text-4xl font-bold text-purple-600" id="yearlyUsd">$300</span>
+                                        </div>
+                                        <p class="text-gray-600 font-medium">Rp 4.850.000</p>
+                                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-2 mt-3">
+                                            <span class="text-purple-700 font-semibold text-sm">Save 30%</span>
+                                        </div>
                                     </div>
-                                    <p class="text-gray-500 text-sm">≈ Rp 2.508.000</p>
-                                    <p class="text-purple-600 font-semibold text-xs mt-1">Save 30%</p>
+
+                                    <!-- FEATURES -->
+                                    <ul class="space-y-3 mb-6">
+                                        <li class="flex items-center">
+                                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Everything in 6 Months</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-gem text-purple-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Custom Indicators</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-gem text-purple-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Dedicated Account Manager</span>
+                                        </li>
+                                        <li class="flex items-center">
+                                            <i class="fas fa-gift text-red-500 mr-3"></i>
+                                            <span class="text-gray-700 font-semibold">Early Feature Access</span>
+                                        </li>
+                                    </ul>
+
+                                    <button type="button" 
+                                            onclick="processPayment('yearly')"
+                                            class="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 transform hover:scale-105 shadow-lg payment-btn yearly-btn">
+                                        <i class="fas fa-crown mr-2"></i>Go Pro
+                                    </button>
                                 </div>
+                            </div>
+                        </div>
 
-                                <!-- FEATURES -->
-                                <ul class="space-y-2.5 mb-5">
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-check text-green-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700">Everything in 6 Months</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-gem text-purple-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700 font-medium">Custom Indicators</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-gem text-purple-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700 font-medium">Dedicated Account Manager</span>
-                                    </li>
-                                    <li class="flex items-center text-sm">
-                                        <i class="fas fa-gift text-red-500 mr-2 text-xs"></i>
-                                        <span class="text-gray-700 font-medium">Early Access to New Features</span>
-                                    </li>
-                                </ul>
-
-                                <!-- PAYMENT METHOD SELECTION -->
-                                <div class="mb-5">
-                                    <label class="block text-xs font-semibold text-gray-700 mb-2">Payment Method:</label>
-                                    <div class="space-y-2">
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-purple-50 cursor-pointer transition duration-200 payment-option" data-plan="yearly">
-                                            <input type="radio" name="payment_method_yearly" value="qris" class="mr-2 text-purple-600" checked>
-                                            <i class="fas fa-qrcode text-purple-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">QRIS</span>
-                                            <span class="ml-auto text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Instant</span>
-                                        </label>
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-purple-50 cursor-pointer transition duration-200 payment-option" data-plan="yearly">
-                                            <input type="radio" name="payment_method_yearly" value="va" class="mr-2 text-purple-600">
-                                            <i class="fas fa-university text-blue-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">Virtual Account</span>
-                                        </label>
-                                        <label class="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-purple-50 cursor-pointer transition duration-200 payment-option" data-plan="yearly">
-                                            <input type="radio" name="payment_method_yearly" value="credit_card" class="mr-2 text-purple-600">
-                                            <i class="fas fa-credit-card text-orange-500 mr-2 text-sm"></i>
-                                            <span class="font-medium text-sm">Credit Card</span>
-                                        </label>
-                                    </div>
+                        <!-- Features Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                            <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+                                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i class="fas fa-bolt text-blue-600 text-xl"></i>
                                 </div>
+                                <h4 class="text-lg font-semibold text-gray-900 mb-2">Lightning Fast</h4>
+                                <p class="text-gray-600 text-sm">Real-time data with minimal latency</p>
+                            </div>
 
-                                <button type="button" 
-                                        onclick="processPayment('yearly')"
-                                        class="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white py-3 px-4 rounded-lg font-semibold text-sm transition duration-200 shadow-sm payment-btn yearly-btn">
-                                    <i class="fas fa-crown mr-1"></i>Go Pro
-                                </button>
+                            <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i class="fas fa-shield-alt text-green-600 text-xl"></i>
+                                </div>
+                                <h4 class="text-lg font-semibold text-gray-900 mb-2">Secure & Reliable</h4>
+                                <p class="text-gray-600 text-sm">Bank-level security guaranteed</p>
+                            </div>
+
+                            <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+                                <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                                </div>
+                                <h4 class="text-lg font-semibold text-gray-900 mb-2">Advanced Analytics</h4>
+                                <p class="text-gray-600 text-sm">AI-powered insights and predictions</p>
                             </div>
                         </div>
 
                         <!-- Payment Security Notice -->
-                        <div class="mt-6 text-center">
-                            <div class="inline-flex items-center text-xs text-gray-500 bg-gray-50 px-4 py-2 rounded-lg">
-                                <i class="fas fa-shield-alt text-green-500 mr-2"></i>
-                                <span>Secure payment processed by Midtrans. Your financial information is encrypted and protected.</span>
+                        <div class="mt-8 text-center">
+                            <div class="inline-flex items-center bg-gray-50 rounded-2xl px-6 py-4 border border-gray-200">
+                                <i class="fas fa-lock text-green-600 text-xl mr-3"></i>
+                                <div class="text-left">
+                                    <h4 class="font-semibold text-gray-900 text-sm">Secure Payment Processing</h4>
+                                    <p class="text-xs text-gray-600">All payments are encrypted and processed securely via Midtrans</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -436,44 +344,40 @@
     </div>
 
     <script>
+        // Global variables
         let currentOrderId = null;
-        let paymentCheckInterval = null;
-        let currentPaymentMethod = null;
         let currentPlanType = null;
-        let currentAmount = null;
 
+        // Harga dalam IDR (tanpa titik) - HARGA BARU
         const planPrices = {
-            'monthly': 299000,
-            '6months': 1497000,
-            'yearly': 2508000
+            'monthly': 490000,      // 490 ribu
+            '6months': 2500000,     // 2.5 juta
+            'yearly': 4850000       // 4.85 juta
         };
 
+        // Harga USD fixed (dengan rate 1 USD = 15,300 IDR)
+        const usdPrices = {
+            'monthly': 32,
+            '6months': 155,
+            'yearly': 300
+        };
+
+        // Main payment processing function
         function processPayment(planType) {
-            console.log('Processing payment for:', planType);
+            console.log('🚀 Starting payment process for plan:', planType);
             
-            // Get selected payment method
-            const paymentMethod = document.querySelector(`input[name="payment_method_${planType}"]:checked`).value;
-            console.log('Selected payment method:', paymentMethod);
-            
-            currentPaymentMethod = paymentMethod;
             currentPlanType = planType;
-            currentAmount = planPrices[planType];
 
-            if (paymentMethod === 'credit_card') {
-                showCreditCardModal(planType);
-            } else {
-                processDirectPayment(planType, paymentMethod);
-            }
-        }
+            // Show loading modal
+            showLoadingModal();
 
-        function processDirectPayment(planType, paymentMethod) {
-            // Show loading state on button
+            // Disable button
             const button = document.querySelector(`.${planType}-btn`);
             const originalText = button.innerHTML;
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Processing...';
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
 
-            // AJAX request
+            // AJAX request to get Snap token
             fetch('{{ route("payment.subscribe") }}', {
                 method: 'POST',
                 headers: {
@@ -483,467 +387,195 @@
                 },
                 body: JSON.stringify({
                     plan: planType,
-                    payment_method: paymentMethod
+                    payment_method: 'snap'
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('📥 Response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
-                console.log('Server response:', data);
+                console.log('✅ Server response:', data);
                 
                 if (data.success) {
-                    currentOrderId = data.payment_data.order_id;
-                    showPaymentInstructions(data.payment_data);
+                    handlePaymentSuccess(data);
                 } else {
-                    alert('Error: ' + data.message);
-                    resetButton(button, originalText);
+                    throw new Error(data.message || 'Payment initialization failed');
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                alert('Network error: ' + error.message);
+                console.error('❌ Payment error:', error);
+                hideLoadingModal();
+                alert('Error: ' + error.message);
                 resetButton(button, originalText);
             });
         }
 
-        function showCreditCardModal(planType) {
-            const modal = document.getElementById('creditCardModal');
-            const header = document.getElementById('creditCardHeader');
-            const submitButton = document.getElementById('creditCardSubmit');
+        // Handle successful payment response
+        function handlePaymentSuccess(data) {
+            console.log('🎯 Payment successful, opening Snap...');
             
-            const amount = planPrices[planType];
-            const formattedAmount = 'Rp ' + amount.toLocaleString('id-ID');
-            
-            header.innerHTML = `
-                <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-credit-card text-blue-600 text-2xl"></i>
-                </div>
-                <h4 class="text-lg font-bold text-gray-900 mb-1">Credit Card Payment</h4>
-                <p class="text-gray-600 text-sm">Amount: ${formattedAmount}</p>
-                <p class="text-gray-500 text-xs">Secure 3D Secure payment</p>
-            `;
-            
-            submitButton.innerHTML = `<i class="fas fa-lock mr-2"></i>Pay ${formattedAmount}`;
-            
-            modal.classList.remove('hidden');
-        }
+            // Simpan order ID untuk callback
+            currentOrderId = data.order_id;
 
-        function processCreditCardPayment() {
-            // Show loading
-            const button = document.getElementById('creditCardSubmit');
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+            // Pastikan Snap token ada
+            if (!data.snap_token) {
+                throw new Error('No Snap token received');
+            }
 
-            // Kirim request payment tanpa parameter bank
-            fetch('{{ route("payment.subscribe") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
-                    plan: currentPlanType,
-                    payment_method: 'credit_card'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Credit Card response:', data);
-                
-                if (data.success) {
-                    currentOrderId = data.payment_data.order_id;
-                    
-                    // Untuk credit card dengan Snap token
-                    if (data.payment_data.snap_token) {
-                        openSnapPopup(data.payment_data.snap_token);
-                    } 
-                    // Jika ada redirect URL (Core API)
-                    else if (data.payment_data.payment_data?.redirect_url) {
-                        window.location.href = data.payment_data.payment_data.redirect_url;
-                    }
-                    // Fallback - show payment instructions
-                    else {
-                        closeCreditCardModal();
-                        showPaymentInstructions(data.payment_data);
-                    }
-                } else {
-                    alert('Error: ' + data.message);
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Network error: ' + error.message);
-                button.disabled = false;
-                button.innerHTML = originalText;
-            });
-        }
-
-        function openSnapPopup(snapToken) {
-            // Buka Snap popup untuk credit card
-            window.snap.pay(snapToken, {
+            console.log('🎫 Snap token received, opening popup...');
+            
+            // Buka Snap popup
+            window.snap.pay(data.snap_token, {
                 onSuccess: function(result) {
-                    console.log('Payment success:', result);
-                    showPaymentSuccess();
+                    console.log('✅ Payment success:', result);
+                    handleSnapCallback('success', result);
                 },
                 onPending: function(result) {
-                    console.log('Payment pending:', result);
-                    showPaymentPending();
+                    console.log('⏳ Payment pending:', result);
+                    handleSnapCallback('pending', result);
                 },
                 onError: function(result) {
-                    console.log('Payment error:', result);
-                    showPaymentError();
+                    console.log('❌ Payment error:', result);
+                    handleSnapCallback('error', result);
                 },
                 onClose: function() {
-                    console.log('Payment popup closed');
-                    // User closed the popup, reset button
-                    const button = document.getElementById('creditCardSubmit');
-                    button.disabled = false;
-                    button.innerHTML = `<i class="fas fa-lock mr-2"></i>Pay Rp ${currentAmount.toLocaleString('id-ID')}`;
+                    console.log('🔒 Payment popup closed by user');
+                    hideLoadingModal();
+                    resetAllButtons();
                 }
             });
         }
 
-        function showPaymentInstructions(paymentData) {
-            const modal = document.getElementById('paymentModal');
-            const content = document.getElementById('paymentContent');
+        // Handle Snap callback
+        function handleSnapCallback(status, result) {
+            hideLoadingModal();
             
-            const instructions = paymentData.payment_instructions;
-            let html = '';
-            
-            // Header
-            html += `
-                <div class="mb-6">
-                    <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 rounded-lg text-center mb-4">
-                        <h4 class="font-bold text-lg mb-2">Payment Instructions</h4>
-                        <p class="text-blue-100">Order ID: ${paymentData.order_id}</p>
-                        <p class="text-blue-100 font-semibold">Amount: Rp ${paymentData.amount.toLocaleString('id-ID')}</p>
-                    </div>
-                </div>
-            `;
-            
-            // Payment-specific instructions
-            if (instructions.type === 'credit_card') {
-                // Credit Card - Show Snap payment button
-                html += `
-                    <div class="text-center mb-6">
-                        <div class="bg-blue-50 p-6 rounded-lg border border-blue-200 mb-4">
-                            <i class="fas fa-credit-card text-blue-500 text-4xl mb-3"></i>
-                            <div class="text-lg font-semibold text-blue-800">Credit Card Payment</div>
-                            <div class="text-blue-600 text-sm">Secure 3D Secure Payment</div>
-                        </div>
-                        <div class="space-y-3 text-left mb-6">
-                            ${instructions.instructions.map(instruction => `
-                                <div class="flex items-start">
-                                    <i class="fas fa-check-circle text-green-500 mt-1 mr-3 flex-shrink-0"></i>
-                                    <span class="text-gray-700 text-sm">${instruction}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <button onclick="openSnapPopup('${instructions.snap_token}')" 
-                                class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 px-6 rounded-lg font-semibold text-lg transition duration-200 shadow-lg mb-4">
-                            <i class="fas fa-lock mr-2"></i>Complete Payment
-                        </button>
-                    </div>
-                `;
-            } else {
-                // QRIS & Virtual Account
-                switch(instructions.type) {
-                    case 'qris':
-                        html += `
-                            <div class="text-center mb-6">
-                                <div class="bg-white p-4 rounded-lg border-2 border-dashed border-gray-300 inline-block mb-4">
-                                    <img src="${instructions.qr_code_url}" alt="QR Code" class="w-48 h-48 mx-auto">
-                                </div>
-                                <div class="space-y-3 text-left">
-                                    ${instructions.instructions.map(instruction => `
-                                        <div class="flex items-start">
-                                            <i class="fas fa-check-circle text-green-500 mt-1 mr-3 flex-shrink-0"></i>
-                                            <span class="text-gray-700 text-sm">${instruction}</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                                <div class="flex items-center">
-                                    <i class="fas fa-clock text-yellow-600 mr-2"></i>
-                                    <span class="text-yellow-800 text-sm font-medium">Payment expires in 24 hours</span>
-                                </div>
-                            </div>
-                        `;
-                        break;
-                        
-                    case 'va':
-                        html += `
-                            <div class="text-center mb-6">
-                                <div class="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-4">
-                                    <div class="text-2xl font-mono font-bold text-gray-900 tracking-wider mb-2">
-                                        ${instructions.va_number}
-                                    </div>
-                                    <div class="text-sm text-gray-600">Virtual Account Number</div>
-                                    <div class="text-xs text-gray-500 mt-1">Bank: ${instructions.bank}</div>
-                                </div>
-                                <div class="space-y-3 text-left">
-                                    ${instructions.instructions.map(instruction => `
-                                        <div class="flex items-start">
-                                            <i class="fas fa-check-circle text-green-500 mt-1 mr-3 flex-shrink-0"></i>
-                                            <span class="text-gray-700 text-sm">${instruction}</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                        break;
-                }
-            }
-            
-            // Common footer (hide for credit card as we have Snap button)
-            if (instructions.type !== 'credit_card') {
-                html += `
-                    <div class="flex space-x-3 mt-6">
-                        <button onclick="closePaymentModal()" 
-                                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-medium transition duration-200">
-                            Cancel
-                        </button>
-                        <button onclick="startPaymentStatusCheck()" 
-                                class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-medium transition duration-200">
-                            <i class="fas fa-sync-alt mr-2"></i>Check Status
-                        </button>
-                    </div>
-                `;
-            }
-            
-            html += `<div id="paymentStatus" class="mt-4 hidden"></div>`;
-            
-            content.innerHTML = html;
-            modal.classList.remove('hidden');
-            
-            // Auto start status check for non-credit card payments
-            if (currentPaymentMethod !== 'credit_card') {
-                startPaymentStatusCheck();
+            switch(status) {
+                case 'success':
+                    showSuccessMessage();
+                    break;
+                case 'pending':
+                    showPendingMessage();
+                    break;
+                case 'error':
+                    showErrorMessage('Payment failed. Please try again.');
+                    break;
             }
         }
 
-        function showPaymentSuccess() {
-            const statusDiv = document.getElementById('paymentStatus');
-            if (statusDiv) {
-                statusDiv.classList.remove('hidden');
-                statusDiv.innerHTML = `
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                        <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
-                        <div class="text-green-800 font-semibold">Payment Successful!</div>
-                        <div class="text-green-600 text-sm mt-1">Redirecting to dashboard...</div>
-                    </div>
-                `;
-            }
-            
+        // Show success message and redirect
+        function showSuccessMessage() {
+            alert('Payment successful! Redirecting to dashboard...');
             setTimeout(() => {
                 window.location.href = '{{ route("payment.finish") }}?status_code=200&order_id=' + currentOrderId;
-            }, 2000);
-            
-            if (paymentCheckInterval) {
-                clearInterval(paymentCheckInterval);
-            }
+            }, 1000);
         }
 
-        function showPaymentPending() {
-            const statusDiv = document.getElementById('paymentStatus');
-            if (statusDiv) {
-                statusDiv.classList.remove('hidden');
-                statusDiv.innerHTML = `
-                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                        <i class="fas fa-clock text-yellow-500 text-2xl mb-2"></i>
-                        <div class="text-yellow-800 font-semibold">Payment Pending</div>
-                        <div class="text-yellow-600 text-sm mt-1">Waiting for payment confirmation...</div>
-                    </div>
-                `;
-            }
-            startPaymentStatusCheck();
-        }
-
-        function showPaymentError() {
-            const statusDiv = document.getElementById('paymentStatus');
-            if (statusDiv) {
-                statusDiv.classList.remove('hidden');
-                statusDiv.innerHTML = `
-                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                        <i class="fas fa-times-circle text-red-500 text-2xl mb-2"></i>
-                        <div class="text-red-800 font-semibold">Payment Failed</div>
-                        <div class="text-red-600 text-sm mt-1">Please try again or contact support.</div>
-                    </div>
-                `;
-            }
-        }
-
-        function closePaymentModal() {
-            const modal = document.getElementById('paymentModal');
-            modal.classList.add('hidden');
-            
-            if (paymentCheckInterval) {
-                clearInterval(paymentCheckInterval);
-                paymentCheckInterval = null;
-            }
-            
-            // Reset all buttons
+        // Show pending message
+        function showPendingMessage() {
+            alert('Payment is pending. Please complete the payment process. You will be notified once payment is confirmed.');
             resetAllButtons();
         }
 
-        function closeCreditCardModal() {
-            const modal = document.getElementById('creditCardModal');
-            modal.classList.add('hidden');
+        // Show error message
+        function showErrorMessage(message) {
+            alert(message || 'Payment failed. Please try again.');
             resetAllButtons();
         }
 
-        function resetAllButtons() {
-            document.querySelectorAll('.payment-btn').forEach(btn => {
-                btn.disabled = false;
-                btn.innerHTML = btn.getAttribute('data-original-text');
+        // Get USD to IDR exchange rate (simulated)
+        async function getExchangeRate() {
+            // Simulate API call with fixed rate
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve(15300); // 1 USD = 15,300 IDR
+                }, 500);
             });
         }
 
+        // Update exchange rate info
+        async function updateExchangeRate() {
+            try {
+                const rate = await getExchangeRate();
+                document.getElementById('exchangeRateInfo').innerHTML = 
+                    `1 USD = Rp ${rate.toLocaleString('id-ID')}`;
+            } catch (error) {
+                console.error('Exchange rate error:', error);
+                document.getElementById('exchangeRateInfo').innerHTML = 
+                    '1 USD ≈ Rp 15,300';
+            }
+        }
+
+        // Modal functions
+        function showLoadingModal() {
+            document.getElementById('loadingModal').classList.remove('hidden');
+        }
+
+        function hideLoadingModal() {
+            document.getElementById('loadingModal').classList.add('hidden');
+        }
+
+        // Utility functions
         function resetButton(button, originalText) {
             button.disabled = false;
             button.innerHTML = originalText;
         }
 
-        function startPaymentStatusCheck() {
-            if (!currentOrderId) return;
-            
-            const statusDiv = document.getElementById('paymentStatus');
-            if (statusDiv) {
-                statusDiv.classList.remove('hidden');
-                statusDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>Checking payment status...</div>';
-            }
-            
-            // Check immediately
-            checkPaymentStatus();
-            
-            // Then check every 10 seconds
-            paymentCheckInterval = setInterval(checkPaymentStatus, 10000);
-        }
-
-        function checkPaymentStatus() {
-            if (!currentOrderId) return;
-            
-            fetch('{{ route("payment.check-status") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    order_id: currentOrderId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                const statusDiv = document.getElementById('paymentStatus');
-                if (!statusDiv) return;
-                
-                if (data.success) {
-                    if (data.transaction_status === 'settlement' || data.transaction_status === 'capture') {
-                        statusDiv.innerHTML = `
-                            <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                                <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
-                                <div class="text-green-800 font-semibold">Payment Successful!</div>
-                                <div class="text-green-600 text-sm mt-1">Redirecting to dashboard...</div>
-                            </div>
-                        `;
-                        
-                        setTimeout(() => {
-                            window.location.href = '{{ route("payment.finish") }}?status_code=200&order_id=' + currentOrderId;
-                        }, 2000);
-                        
-                        if (paymentCheckInterval) {
-                            clearInterval(paymentCheckInterval);
-                        }
-                    } else if (data.transaction_status === 'pending') {
-                        statusDiv.innerHTML = `
-                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                                <i class="fas fa-clock text-yellow-500 text-2xl mb-2"></i>
-                                <div class="text-yellow-800 font-semibold">Payment Pending</div>
-                                <div class="text-yellow-600 text-sm mt-1">Waiting for payment confirmation...</div>
-                            </div>
-                        `;
-                    } else {
-                        statusDiv.innerHTML = `
-                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                                <i class="fas fa-times-circle text-red-500 text-2xl mb-2"></i>
-                                <div class="text-red-800 font-semibold">Payment ${data.transaction_status}</div>
-                                <div class="text-red-600 text-sm mt-1">Please try again or contact support.</div>
-                            </div>
-                        `;
-                    }
-                } else {
-                    statusDiv.innerHTML = `
-                        <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                            <div class="text-red-800 font-semibold">Failed to check status</div>
-                        </div>
-                    `;
+        function resetAllButtons() {
+            document.querySelectorAll('.payment-btn').forEach(btn => {
+                btn.disabled = false;
+                if (btn.getAttribute('data-original-text')) {
+                    btn.innerHTML = btn.getAttribute('data-original-text');
                 }
-            })
-            .catch(error => {
-                console.error('Status check error:', error);
             });
         }
 
-        // Initialize payment options
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Store original button text
             document.querySelectorAll('.payment-btn').forEach(btn => {
                 btn.setAttribute('data-original-text', btn.innerHTML);
             });
 
-            // Set first payment option as active for each plan
-            ['monthly', '6months', 'yearly'].forEach(plan => {
-                const firstOption = document.querySelector(`input[name="payment_method_${plan}"]`);
-                if (firstOption) {
-                    firstOption.checked = true;
-                    firstOption.closest('label').classList.add('border-blue-500', 'bg-blue-50');
-                }
-            });
+            // Update exchange rate
+            updateExchangeRate();
 
-            // Add click handlers to payment options
-            document.querySelectorAll('.payment-option').forEach(option => {
-                option.addEventListener('click', function() {
-                    const radio = this.querySelector('input[type="radio"]');
-                    if (radio) {
-                        // Remove active class from siblings
-                        const groupName = radio.getAttribute('name');
-                        document.querySelectorAll(`input[name="${groupName}"]`).forEach(r => {
-                            r.closest('label').classList.remove('border-blue-500', 'bg-blue-50', 'border-green-500', 'bg-green-50', 'border-purple-500', 'bg-purple-50');
-                        });
-                        
-                        // Add active class to clicked option with appropriate color
-                        const planType = groupName.replace('payment_method_', '');
-                        if (planType === 'monthly') {
-                            this.classList.add('border-blue-500', 'bg-blue-50');
-                        } else if (planType === '6months') {
-                            this.classList.add('border-green-500', 'bg-green-50');
-                        } else {
-                            this.classList.add('border-purple-500', 'bg-purple-50');
-                        }
-                        
-                        radio.checked = true;
-                    }
-                });
-            });
-
-            // Load Midtrans Snap.js if needed
-            @if(config('services.midtrans.is_production', false))
-                const script = document.createElement('script');
-                script.src = 'https://app.midtrans.com/snap/snap.js';
-                script.setAttribute('data-client-key', '{{ config('services.midtrans.client_key') }}');
-                document.head.appendChild(script);
-            @else
-                const script = document.createElement('script');
-                script.src = 'https://app.sandbox.midtrans.com/snap/snap.js';
-                script.setAttribute('data-client-key', '{{ config('services.midtrans.client_key') }}');
-                document.head.appendChild(script);
-            @endif
+            // Load Midtrans Snap.js
+            loadMidtransScript();
         });
+
+        // Load Midtrans Snap script
+        function loadMidtransScript() {
+            // Cek apakah script sudah dimuat
+            if (window.snap) {
+                console.log('📜 Midtrans Snap already loaded');
+                return;
+            }
+
+            const script = document.createElement('script');
+            const isProduction = {{ config('services.midtrans.is_production', false) ? 'true' : 'false' }};
+            const clientKey = '{{ config('services.midtrans.client_key') }}';
+            
+            script.src = isProduction 
+                ? 'https://app.midtrans.com/snap/snap.js'
+                : 'https://app.sandbox.midtrans.com/snap/snap.js';
+            
+            script.setAttribute('data-client-key', clientKey);
+            
+            script.onload = function() {
+                console.log('✅ Midtrans Snap loaded successfully');
+            };
+            
+            script.onerror = function() {
+                console.error('❌ Failed to load Midtrans Snap');
+            };
+            
+            document.head.appendChild(script);
+        }
     </script>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

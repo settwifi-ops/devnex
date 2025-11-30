@@ -62,14 +62,9 @@ class MidtransService
         ]);
 
         try {
-            // Use appropriate payment method based on type
-            if (in_array($paymentMethod, ['qris', 'va'])) {
-                return $this->createCoreApiPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails);
-            } elseif ($paymentMethod === 'credit_card') {
-                return $this->createCreditCardPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails);
-            } else {
-                return $this->createSnapPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails);
-            }
+            // ✅ GUNAKAN SNAP API UNTUK SEMUA PAYMENT METHOD
+            // "QRIS Dinamis GoPay" hanya tersedia di Snap API, bukan Core API
+            return $this->createSnapPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails);
 
         } catch (\Exception $e) {
             \Log::error('Payment creation failed: ' . $e->getMessage());
@@ -78,101 +73,7 @@ class MidtransService
     }
 
     /**
-     * Create Core API payment for QRIS and VA
-     */
-    private function createCoreApiPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails)
-    {
-        $mappedMethod = $this->mapPaymentMethod($paymentMethod);
-        
-        $transactionData = [
-            'payment_type' => $mappedMethod,
-            'transaction_details' => $transactionDetails,
-            'customer_details' => $customerDetails,
-        ];
-
-        // Add payment-specific parameters
-        if ($paymentMethod === 'qris') {
-            $transactionData['qris'] = ['acquirer' => 'gopay'];
-        } elseif ($paymentMethod === 'va') {
-            $transactionData['bank_transfer'] = ['bank' => 'bca'];
-        }
-
-        \Log::info('Core API transaction data:', $transactionData);
-
-        try {
-            $charge = CoreApi::charge($transactionData);
-            
-            \Log::info('Core API charge response:', [
-                'status' => $charge->status ?? null,
-                'payment_type' => $charge->payment_type ?? null,
-                'order_id' => $charge->order_id ?? null
-            ]);
-
-            // Create pending subscription
-            $this->createPendingSubscription($user, $orderId, $plan, $priceIdr);
-
-            return [
-                'order_id' => $orderId,
-                'payment_data' => $charge,
-                'payment_method' => $paymentMethod,
-                'amount' => $priceIdr,
-                'plan' => $plan,
-                'payment_instructions' => $this->generateCoreApiInstructions($paymentMethod, $charge, $priceIdr)
-            ];
-            
-        } catch (\Exception $e) {
-            \Log::error('Core API payment failed: ' . $e->getMessage());
-            throw new \Exception($paymentMethod . ' payment failed: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Create Credit Card payment
-     */
-    private function createCreditCardPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails)
-    {
-        \Log::info('Creating Credit Card payment...');
-
-        $transactionData = [
-            'transaction_details' => $transactionDetails,
-            'customer_details' => $customerDetails,
-            'credit_card' => [
-                'secure' => true,
-                'bank' => 'bni',
-            ],
-            'callbacks' => [
-                'finish' => url('/payment/finish')
-            ]
-        ];
-
-        try {
-            $snapToken = Snap::getSnapToken($transactionData);
-            
-            \Log::info('Credit Card Snap token generated:', [
-                'order_id' => $orderId,
-                'has_token' => !empty($snapToken)
-            ]);
-
-            // Create pending subscription
-            $this->createPendingSubscription($user, $orderId, $plan, $priceIdr);
-
-            return [
-                'order_id' => $orderId,
-                'snap_token' => $snapToken,
-                'payment_method' => $paymentMethod,
-                'amount' => $priceIdr,
-                'plan' => $plan,
-                'payment_instructions' => $this->generateCreditCardInstructions($snapToken, $priceIdr)
-            ];
-            
-        } catch (\Exception $e) {
-            \Log::error('Credit Card payment failed: ' . $e->getMessage());
-            throw new \Exception('Credit Card payment failed: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Create Snap payment for other methods
+     * Create Snap payment for ALL methods (QRIS, VA, Credit Card)
      */
     private function createSnapPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails)
     {
@@ -184,128 +85,90 @@ class MidtransService
             ]
         ];
 
+        // ✅ TAMBAHKAN ENABLED PAYMENTS UNTUK MEMAKSA QRIS
+        $enabledPayments = $this->getEnabledPayments($paymentMethod);
+        if (!empty($enabledPayments)) {
+            $transactionData['enabled_payments'] = $enabledPayments;
+        }
+
+        \Log::info('Snap transaction data:', [
+            'order_id' => $orderId,
+            'payment_method' => $paymentMethod,
+            'enabled_payments' => $enabledPayments,
+            'amount' => $priceIdr
+        ]);
+
         try {
             $snapToken = Snap::getSnapToken($transactionData);
             
+            \Log::info('Snap token generated successfully:', [
+                'order_id' => $orderId,
+                'has_token' => !empty($snapToken),
+                'payment_method' => $paymentMethod
+            ]);
+
             // Create pending subscription
             $this->createPendingSubscription($user, $orderId, $plan, $priceIdr);
 
+            // ✅ STANDARDIZED RESPONSE
             return [
                 'order_id' => $orderId,
                 'snap_token' => $snapToken,
                 'payment_method' => $paymentMethod,
                 'amount' => $priceIdr,
                 'plan' => $plan,
-                'payment_instructions' => $this->generateSnapInstructions($paymentMethod, $snapToken, $priceIdr)
+                'redirect_url' => config('services.midtrans.is_production') 
+                    ? "https://app.midtrans.com/snap/v2/vtweb/{$snapToken}"
+                    : "https://app.sandbox.midtrans.com/snap/v2/vtweb/{$snapToken}",
+                'type' => 'snap' // ✅ ADD TYPE FOR FRONTEND
             ];
             
         } catch (\Exception $e) {
             \Log::error('Snap payment failed: ' . $e->getMessage());
+            \Log::error('Snap error details:', [
+                'order_id' => $orderId,
+                'payment_method' => $paymentMethod,
+                'error_trace' => $e->getTraceAsString()
+            ]);
             throw new \Exception('Payment failed: ' . $e->getMessage());
         }
     }
 
     /**
-     * Generate instructions for Credit Card
+     * Get enabled payments based on selected method
      */
-    private function generateCreditCardInstructions($snapToken, $amount)
+    private function getEnabledPayments($paymentMethod)
     {
-        $formattedAmount = 'Rp ' . number_format($amount, 0, ',', '.');
-        
-        return [
-            'type' => 'credit_card',
-            'snap_token' => $snapToken,
-            'instructions' => [
-                'Click the "Complete Payment" button below',
-                'You will be redirected to secure payment page',
-                'Enter your credit card details',
-                '3D Secure authentication will be required',
-                'Amount: ' . $formattedAmount
-            ]
-        ];
-    }
-
-    /**
-     * Generate payment instructions for Core API responses
-     */
-    private function generateCoreApiInstructions($paymentMethod, $chargeData, $amount)
-    {
-        $formattedAmount = 'Rp ' . number_format($amount, 0, ',', '.');
-        
-        switch ($paymentMethod) {
-            case 'qris':
-                $qrisContent = $chargeData->qr_string ?? null;
-                $qrCodeUrl = $qrisContent ? 
-                    'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($qrisContent) :
-                    null;
-                    
-                return [
-                    'type' => 'qris',
-                    'qris_content' => $qrisContent,
-                    'qr_code_url' => $qrCodeUrl,
-                    'instructions' => [
-                        'Scan QR code using your mobile banking app',
-                        'Confirm payment in your banking app',
-                        'Amount: ' . $formattedAmount,
-                        'Payment will be verified automatically'
-                    ]
-                ];
-                
-            case 'va':
-                $vaNumber = $chargeData->va_numbers[0]->va_number ?? null;
-                $bank = $chargeData->va_numbers[0]->bank ?? 'BCA';
-                
-                return [
-                    'type' => 'va',
-                    'va_number' => $vaNumber,
-                    'bank' => strtoupper($bank),
-                    'instructions' => [
-                        'Transfer the exact amount: ' . $formattedAmount,
-                        'Use Virtual Account Number: ' . ($vaNumber ?? 'Processing...'),
-                        'Bank: ' . strtoupper($bank),
-                        'Payment will be verified automatically'
-                    ]
-                ];
-                
-            default:
-                return [
-                    'type' => 'unknown',
-                    'instructions' => ['Please complete the payment process'],
-                ];
-        }
-    }
-
-    /**
-     * Generate payment instructions for Snap responses
-     */
-    private function generateSnapInstructions($paymentMethod, $snapToken, $amount)
-    {
-        $formattedAmount = 'Rp ' . number_format($amount, 0, ',', '.');
-        
-        return [
-            'type' => 'snap_redirect',
-            'snap_token' => $snapToken,
-            'instructions' => [
-                'You will be redirected to payment page',
-                'Complete your payment there',
-                'Amount: ' . $formattedAmount
-            ]
-        ];
-    }
-
-    /**
-     * Map payment method to Midtrans payment type
-     */
-    private function mapPaymentMethod($paymentMethod)
-    {
+        // ✅ MAP PAYMENT METHOD KE SNAP PAYMENT TYPES
         $mapping = [
-            'qris' => 'qris',
-            'va' => 'bank_transfer',
-            'credit_card' => 'credit_card'
+            'qris' => ['gopay', 'shopeepay'], // QRIS via GoPay/ShopeePay
+            'va' => ['bni_va', 'bri_va', 'bca_va', 'permata_va'],
+            'credit_card' => ['credit_card']
         ];
-        
-        return $mapping[$paymentMethod] ?? $paymentMethod;
+
+        return $mapping[$paymentMethod] ?? [];
     }
+
+    /**
+     * Create Core API payment (HAPUS/COMMENT - tidak digunakan)
+     */
+    /*
+    private function createCoreApiPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails)
+    {
+        // ❌ JANGAN GUNAKAN CORE API UNTUK QRIS DINAMIS GOPAY
+        // Hanya tersedia di Snap API
+    }
+    */
+
+    /**
+     * Create Credit Card payment (HAPUS/COMMENT - sudah digabung ke Snap)
+     */
+    /*
+    private function createCreditCardPayment($user, $plan, $paymentMethod, $priceIdr, $orderId, $transactionDetails, $customerDetails)
+    {
+        // ❌ SUDAH DIGABUNG KE createSnapPayment
+    }
+    */
 
     /**
      * Get plan prices
@@ -313,9 +176,9 @@ class MidtransService
     private function getPlanPrices()
     {
         return [
-            'monthly' => 299000,
-            '6months' => 1497000, 
-            'yearly' => 2508000
+            'monthly' => 490000,      // 490 ribu
+            '6months' => 2500000,     // 2.5 juta  
+            'yearly' => 4850000       // 4.85 juta
         ];
     }
 
@@ -460,14 +323,6 @@ class MidtransService
     }
 
     /**
-     * Alias method for embedded payment
-     */
-    public function createEmbeddedPayment(User $user, string $plan, string $paymentMethod)
-    {
-        return $this->createSubscription($user, $plan, $paymentMethod);
-    }
-
-    /**
      * Validate Midtrans configuration
      */
     public function validateConfiguration()
@@ -485,7 +340,8 @@ class MidtransService
             
             return [
                 'success' => true,
-                'message' => 'Midtrans configuration is valid'
+                'message' => 'Midtrans configuration is valid',
+                'snap_token' => $snapToken
             ];
         } catch (\Exception $e) {
             \Log::error('Midtrans configuration validation failed: ' . $e->getMessage());

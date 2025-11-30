@@ -18,23 +18,22 @@ class PaymentController extends Controller
     /**
      * Create subscription payment
      */
+    /**
+     * Create subscription payment - HANYA SNAP
+     */
     public function createSubscription(Request $request)
     {
         $request->validate([
             'plan' => 'required|in:monthly,6months,yearly',
-            'payment_method' => 'required|in:qris,va,credit_card'
+            'payment_method' => 'required|in:snap' // Hanya terima 'snap'
         ]);
 
         $user = auth()->user();
         $plan = $request->plan;
-        $paymentMethod = $request->payment_method;
 
-        \Log::info('=== PAYMENT SUBSCRIBE REQUEST ===', [
+        \Log::info('=== SNAP PAYMENT REQUEST ===', [
             'user_id' => $user->id,
-            'plan' => $plan,
-            'payment_method' => $paymentMethod,
-            'is_ajax' => $request->ajax(),
-            'wants_json' => $request->wantsJson()
+            'plan' => $plan
         ]);
 
         // Check if user already has active subscription
@@ -46,36 +45,70 @@ class PaymentController extends Controller
         }
 
         try {
-            $paymentData = $this->midtransService->createSubscription($user, $plan, $paymentMethod);
+            // Selalu gunakan MidtransService untuk Snap
+            $paymentData = $this->midtransService->createSubscription($user, $plan, 'snap');
             
-            \Log::info('Payment data generated successfully', [
+            \Log::info('Snap payment data generated', [
                 'order_id' => $paymentData['order_id'],
-                'user_id' => $user->id,
-                'payment_method' => $paymentMethod,
-                'has_snap_token' => isset($paymentData['snap_token']),
-                'has_payment_data' => isset($paymentData['payment_data'])
+                'has_snap_token' => !empty($paymentData['snap_token'])
             ]);
 
             return response()->json([
                 'success' => true,
-                'payment_data' => $paymentData,
                 'order_id' => $paymentData['order_id'],
+                'snap_token' => $paymentData['snap_token'],
                 'message' => 'Payment initialized successfully'
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Payment initialization failed: ' . $e->getMessage());
-            \Log::error('Payment error details:', [
-                'user_id' => $user->id,
-                'plan' => $plan,
-                'payment_method' => $paymentMethod,
-                'error_trace' => $e->getTraceAsString()
-            ]);
+            \Log::error('Snap payment initialization failed: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
                 'message' => 'Payment initialization failed: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Create pending subscription record
+     */
+    private function createPendingSubscription($user, $orderId, $plan)
+    {
+        try {
+            $planPrices = [
+                'monthly' => 299000,
+                '6months' => 1497000,
+                'yearly' => 2508000
+            ];
+
+            $subscription = Subscription::create([
+                'user_id' => $user->id,
+                'provider' => 'midtrans',
+                'subscription_id' => $orderId,
+                'status' => 'pending',
+                'plan' => $plan,
+                'amount_idr' => $planPrices[$plan] ?? 299000,
+                'start_date' => null,
+                'end_date' => null,
+            ]);
+
+            \Log::info('Pending subscription created', [
+                'subscription_id' => $subscription->id,
+                'order_id' => $orderId,
+                'user_id' => $user->id,
+                'plan' => $plan
+            ]);
+
+            return $subscription;
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to create pending subscription', [
+                'user_id' => $user->id,
+                'order_id' => $orderId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
         }
     }
 
