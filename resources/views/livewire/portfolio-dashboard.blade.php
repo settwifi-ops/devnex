@@ -85,7 +85,7 @@
         @endif
 
         @if(!$isLoading && $portfolio)
-        <!-- Real-time Controls - Compact Version -->
+        <!-- Real-time Controls - Compact but Informative -->
         <div class="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 backdrop-blur-sm border border-blue-200 rounded-xl p-4 mb-6 shadow-lg transition-all duration-300">
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                 <div class="flex items-center space-x-4">
@@ -95,7 +95,7 @@
                             <span class="text-xs font-semibold text-gray-800">Live Trading</span>
                         </div>
                     </div>
-                    <div>
+                    <div class="space-y-1">
                         <p class="text-xs text-gray-600 font-medium">Last updated</p>
                         <p class="text-xs font-mono font-bold text-gray-900 bg-white/50 px-2 py-1 rounded-md">{{ $lastUpdate }}</p>
                     </div>
@@ -108,12 +108,12 @@
                                       'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-green-400' : 
                                       'bg-white/80 hover:bg-white border-gray-200 text-gray-700 hover:border-blue-300' }}">
                         <span class="text-xs">{{ $autoRefresh ? '🔴' : '🟢' }}</span>
-                        <span>Auto: {{ $autoRefresh ? 'ON' : 'OFF' }}</span>
+                        <span>Auto Refresh: {{ $autoRefresh ? 'ON' : 'OFF' }}</span>
                     </button>
 
                     <!-- Risk Level Badge -->
                     <div class="px-3 py-2 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 flex items-center space-x-2 shadow-sm">
-                        <span class="text-xs font-semibold text-gray-700">Risk:</span>
+                        <span class="text-xs font-semibold text-gray-700">Risk Level:</span>
                         <span class="px-2 py-1 rounded-full text-xs font-bold 
                             {{ $portfolio->risk_mode === 'CONSERVATIVE' ? 'bg-green-500/20 text-green-700 border border-green-400/50' : 
                                ($portfolio->risk_mode === 'MODERATE' ? 'bg-yellow-500/20 text-yellow-700 border border-yellow-400/50' : 
@@ -130,26 +130,32 @@
         <div wire:poll.{{ $refreshInterval }}ms="refreshRealTime" class="hidden"></div>
         @endif
 
-        <!-- Portfolio Stats Grid - Compact Cards -->
+        <!-- Portfolio Stats Grid - Compact with Full Info -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <!-- Total Balance Card -->
             <div class="bg-white/90 backdrop-blur-sm border border-blue-100 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 group hover:border-blue-200 cursor-pointer transform hover:-translate-y-1 relative overflow-hidden">
                 <div class="absolute -inset-0.5 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 
-                <div class="relative z-10 flex items-center justify-between">
-                    <div class="flex-1">
-                        <div class="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-300 mb-1">
-                            ${{ number_format($portfolio->balance, 2) }}
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-300">
+                                ${{ number_format($portfolio->balance, 2) }}
+                            </div>
+                            <div class="text-xs font-semibold text-gray-600 group-hover:text-blue-500 transition-colors duration-300">
+                                Total Balance
+                            </div>
                         </div>
-                        <div class="text-xs font-semibold text-gray-600 group-hover:text-blue-500 transition-colors duration-300">
-                            Total Balance
+                        
+                        <div class="relative">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
+                                <i class="fas fa-wallet text-white text-sm"></i>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="relative">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
-                            <i class="fas fa-wallet text-white text-sm"></i>
-                        </div>
+                    <div class="text-xs text-gray-500 font-medium group-hover:text-blue-400 transition-colors duration-300 border-t border-gray-100 pt-2">
+                        Initial: ${{ number_format($portfolio->initial_balance, 2) }}
+                        • Change: {{ number_format((($portfolio->balance - $portfolio->initial_balance) / $portfolio->initial_balance) * 100, 2) }}%
                     </div>
                 </div>
             </div>
@@ -158,20 +164,26 @@
             <div class="bg-white/90 backdrop-blur-sm border border-emerald-100 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 group hover:border-emerald-200 cursor-pointer transform hover:-translate-y-1 relative overflow-hidden">
                 <div class="absolute -inset-0.5 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 
-                <div class="relative z-10 flex items-center justify-between">
-                    <div class="flex-1">
-                        <div class="text-lg font-bold {{ $this->availableBalanceColor }} group-hover:{{ $portfolio->available_balance > 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300 mb-1">
-                            ${{ number_format($portfolio->available_balance, 2) }}
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="text-lg font-bold {{ $this->availableBalanceColor }} group-hover:{{ $portfolio->available_balance > 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300">
+                                ${{ number_format($portfolio->available_balance, 2) }}
+                            </div>
+                            <div class="text-xs font-semibold text-gray-600 group-hover:text-emerald-500 transition-colors duration-300">
+                                Available Balance
+                            </div>
                         </div>
-                        <div class="text-xs font-semibold text-gray-600 group-hover:text-emerald-500 transition-colors duration-300">
-                            Available
+                        
+                        <div class="relative">
+                            <div class="w-10 h-10 rounded-xl {{ $portfolio->available_balance > 0 ? 'bg-gradient-to-br from-emerald-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-rose-600' }} flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
+                                <i class="fas {{ $portfolio->available_balance > 0 ? 'fa-unlock' : 'fa-lock' }} text-white text-sm"></i>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="relative">
-                        <div class="w-10 h-10 rounded-xl {{ $portfolio->available_balance > 0 ? 'bg-gradient-to-br from-emerald-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-rose-600' }} flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
-                            <i class="fas {{ $portfolio->available_balance > 0 ? 'fa-unlock' : 'fa-lock' }} text-white text-sm"></i>
-                        </div>
+                    <div class="text-xs font-medium {{ $this->utilizationColor }} transition-colors duration-300 border-t border-gray-100 pt-2">
+                        Utilization: {{ number_format($portfolio->utilization_percentage, 1) }}%
+                        • Margin: ${{ number_format($portfolio->balance - $portfolio->available_balance, 2) }}
                     </div>
                 </div>
                 
@@ -186,20 +198,26 @@
             <div class="bg-white/90 backdrop-blur-sm border border-purple-100 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 group hover:border-purple-200 cursor-pointer transform hover:-translate-y-1 relative overflow-hidden">
                 <div class="absolute -inset-0.5 bg-gradient-to-br from-purple-400/20 to-indigo-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 
-                <div class="relative z-10 flex items-center justify-between">
-                    <div class="flex-1">
-                        <div class="text-lg font-bold text-gray-900 group-hover:text-purple-600 transition-colors duration-300 mb-1">
-                            ${{ number_format($portfolio->equity, 2) }}
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="text-lg font-bold text-gray-900 group-hover:text-purple-600 transition-colors duration-300">
+                                ${{ number_format($portfolio->equity, 2) }}
+                            </div>
+                            <div class="text-xs font-semibold text-gray-600 group-hover:text-purple-500 transition-colors duration-300">
+                                Total Equity
+                            </div>
                         </div>
-                        <div class="text-xs font-semibold text-gray-600 group-hover:text-purple-500 transition-colors duration-300">
-                            Equity
+                        
+                        <div class="relative">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
+                                <i class="fas fa-chart-line text-white text-sm"></i>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="relative">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
-                            <i class="fas fa-chart-line text-white text-sm"></i>
-                        </div>
+                    <div class="text-xs font-medium {{ $this->equityChangePercentage >= 0 ? 'text-emerald-600' : 'text-red-600' }} group-hover:{{ $this->equityChangePercentage >= 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300 border-t border-gray-100 pt-2">
+                        {{ $this->equityChangePercentage >= 0 ? '↗' : '↘' }} {{ number_format(abs($this->equityChangePercentage), 2) }}% from initial
+                        • Floating: ${{ number_format($portfolio->equity - $portfolio->balance, 2) }}
                     </div>
                 </div>
             </div>
@@ -231,35 +249,83 @@
                         </div>
                     </div>
                     
+                    <!-- Enhanced Win Rate Info -->
+                    @if($this->advancedWinRate['total_trades'] === 0 && $this->openPositionsCount > 0)
+                    <div class="text-xs text-gray-500 mb-2 animate-pulse">
+                        Calculating win rate...
+                    </div>
+                    @elseif($this->advancedWinRate['total_trades'] > 0)
+                    <div class="text-xs text-gray-500 mb-2">
+                        {{ $this->advancedWinRate['winning_trades'] }}/{{ $this->advancedWinRate['total_trades'] }} wins
+                        @if($this->profitFactor > 0)
+                        • PF: {{ number_format($this->profitFactor, 2) }}
+                        @endif
+                    </div>
+                    @else
+                    <div class="text-xs text-gray-500 mb-2">
+                        No trades completed yet
+                    </div>
+                    @endif
+                    
                     <!-- Win Rate Progress Bar -->
-                    <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden shadow-inner">
-                        <div class="h-1.5 rounded-full bg-gradient-to-r {{ $this->winRateProgressColor }} transition-all duration-1000 ease-out shadow-sm" 
-                             style="width: {{ $this->winRate }}%"></div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-gray-500 font-medium">
+                            <span>Performance</span>
+                            <span>
+                                @if($this->advancedWinRate['total_trades'] > 0)
+                                    {{ $this->advancedWinRate['total_trades'] }} trades
+                                @else
+                                    No trades
+                                @endif
+                            </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden shadow-inner">
+                            <div class="h-1.5 rounded-full bg-gradient-to-r {{ $this->winRateProgressColor }} transition-all duration-1000 ease-out shadow-sm" 
+                                 style="width: {{ $this->winRate }}%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span class="{{ $this->winRateColor }} font-bold">
+                                {{ $this->winRatePerformance }}
+                            </span>
+                            <span>
+                                @if($this->advancedWinRate['total_trades'] > 0)
+                                    W:{{ $this->winningTrades }} L:{{ $this->losingTrades }}
+                                @else
+                                    --
+                                @endif
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- P&L Performance Row - Compact -->
+        <!-- P&L Performance Row - Compact with Details -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
             <!-- Floating P&L Card -->
             <div class="bg-white/90 backdrop-blur-sm border {{ $this->floatingPnlBorderColor }} rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 group {{ $this->floatingPnlHoverBorderColor }} cursor-pointer transform hover:-translate-y-0.5 relative overflow-hidden">
                 <div class="absolute -inset-0.5 {{ $this->floatingPnl >= 0 ? 'bg-gradient-to-br from-green-400/20 to-emerald-500/20' : 'bg-gradient-to-br from-red-400/20 to-rose-500/20' }} rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 
-                <div class="relative z-10 flex items-center justify-between">
-                    <div class="flex-1">
-                        <div class="text-xl font-bold {{ $this->floatingPnlColor }} group-hover:{{ $this->floatingPnl >= 0 ? 'text-green-500' : 'text-red-500' }} transition-colors duration-300 mb-1">
-                            ${{ number_format($this->floatingPnl, 2) }}
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="text-xl font-bold {{ $this->floatingPnlColor }} group-hover:{{ $this->floatingPnl >= 0 ? 'text-green-500' : 'text-red-500' }} transition-colors duration-300">
+                                ${{ number_format($this->floatingPnl, 2) }}
+                            </div>
+                            <div class="text-sm font-semibold text-gray-600 group-hover:{{ $this->floatingPnl >= 0 ? 'text-green-500' : 'text-red-500' }} transition-colors duration-300">
+                                Floating P&L
+                            </div>
                         </div>
-                        <div class="text-sm font-semibold text-gray-600 group-hover:{{ $this->floatingPnl >= 0 ? 'text-green-500' : 'text-red-500' }} transition-colors duration-300">
-                            Floating P&L
+                        
+                        <div class="relative">
+                            <div class="w-12 h-12 rounded-xl {{ $this->floatingPnlBgGradient }} flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
+                                <i class="fas {{ $this->floatingPnlIcon }} text-white text-base"></i>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="relative">
-                        <div class="w-12 h-12 rounded-xl {{ $this->floatingPnlBgGradient }} flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
-                            <i class="fas {{ $this->floatingPnlIcon }} text-white text-base"></i>
-                        </div>
+                    <div class="text-sm font-medium {{ $this->floatingPnlColor }} group-hover:{{ $this->floatingPnl >= 0 ? 'text-green-400' : 'text-red-400' }} transition-colors duration-300 border-t border-gray-100 pt-2">
+                        {{ $this->floatingPnlPercentage >= 0 ? '↗' : '↘' }} {{ number_format(abs($this->floatingPnlPercentage), 2) }}%
+                        • Open Positions: {{ $this->openPositionsCount }}
                     </div>
                 </div>
             </div>
@@ -268,35 +334,41 @@
             <div class="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border {{ $portfolio->realized_pnl >= 0 ? 'border-emerald-100' : 'border-red-100' }} p-4 hover:shadow-xl transition-all duration-300 group hover:{{ $portfolio->realized_pnl >= 0 ? 'border-emerald-200' : 'border-red-200' }} cursor-pointer transform hover:-translate-y-0.5 relative overflow-hidden">
                 <div class="absolute -inset-0.5 {{ $portfolio->realized_pnl >= 0 ? 'bg-gradient-to-br from-emerald-400/20 to-green-500/20' : 'bg-gradient-to-br from-red-400/20 to-rose-500/20' }} rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 
-                <div class="relative z-10 flex items-center justify-between">
-                    <div class="flex-1">
-                        <div class="text-xl font-bold {{ $portfolio->realized_pnl >= 0 ? 'text-emerald-600' : 'text-red-600' }} group-hover:{{ $portfolio->realized_pnl >= 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300 mb-1">
-                            ${{ number_format($portfolio->realized_pnl, 2) }}
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="text-xl font-bold {{ $portfolio->realized_pnl >= 0 ? 'text-emerald-600' : 'text-red-600' }} group-hover:{{ $portfolio->realized_pnl >= 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300">
+                                ${{ number_format($portfolio->realized_pnl, 2) }}
+                            </div>
+                            <div class="text-sm font-semibold text-gray-600 group-hover:{{ $portfolio->realized_pnl >= 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300">
+                                Realized P&L
+                            </div>
                         </div>
-                        <div class="text-sm font-semibold text-gray-600 group-hover:{{ $portfolio->realized_pnl >= 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300">
-                            Realized P&L
+                        
+                        <div class="relative">
+                            <div class="w-12 h-12 rounded-xl {{ $portfolio->realized_pnl >= 0 ? 'bg-gradient-to-br from-emerald-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-rose-600' }} flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
+                                <i class="fas {{ $portfolio->realized_pnl >= 0 ? 'fa-chart-line-up' : 'fa-chart-line-down' }} text-white text-base"></i>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="relative">
-                        <div class="w-12 h-12 rounded-xl {{ $portfolio->realized_pnl >= 0 ? 'bg-gradient-to-br from-emerald-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-rose-600' }} flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
-                            <i class="fas {{ $portfolio->realized_pnl >= 0 ? 'fa-chart-line-up' : 'fa-chart-line-down' }} text-white text-base"></i>
-                        </div>
+                    <div class="text-sm font-medium {{ $portfolio->realized_pnl >= 0 ? 'text-emerald-600' : 'text-red-600' }} group-hover:{{ $portfolio->realized_pnl >= 0 ? 'text-emerald-500' : 'text-red-500' }} transition-colors duration-300 border-t border-gray-100 pt-2">
+                        {{ $this->realizedPnlPercentage >= 0 ? '↗' : '↘' }} {{ number_format(abs($this->realizedPnlPercentage), 2) }}% from initial
+                        • Total Trades: {{ $this->advancedWinRate['total_trades'] }}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Trading Status & Risk Management - Compact -->
+        <!-- Trading Status & Risk Management - Compact with Full Info -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            <!-- AI Status Card - Compact -->
+            <!-- AI Status Card - Compact with Details -->
             <div class="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 p-5 hover:shadow-xl transition-all duration-300 group">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-base font-bold text-gray-900 flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300">
                             <i class="fa-solid fa-robot text-white text-xs"></i>
                         </div>
-                        <span class="bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">AI Status</span>
+                        <span class="bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">AI Trading Status</span>
                     </h3>
                     <div class="flex flex-col items-end space-y-1">
                         <span class="px-2 py-1 rounded-full text-xs font-bold {{ $portfolio->ai_trade_enabled ? 'bg-green-500/20 text-green-700 border border-green-400/50' : 'bg-red-500/20 text-red-700 border border-red-400/50' }}">
@@ -304,7 +376,7 @@
                         </span>
                         <div class="flex items-center space-x-1 text-xs {{ $portfolio->can_trade ? 'text-green-600' : 'text-amber-600' }} font-semibold">
                             <div class="w-1.5 h-1.5 rounded-full {{ $portfolio->can_trade ? 'bg-green-500 animate-pulse' : 'bg-amber-500' }}"></div>
-                            <span>{{ $portfolio->can_trade ? 'Ready' : 'Limited' }}</span>
+                            <span>{{ $portfolio->can_trade ? 'Ready to Trade' : 'Trading Limited' }}</span>
                         </div>
                     </div>
                 </div>
@@ -318,7 +390,10 @@
                                 <i class="fas fa-check text-white text-xs"></i>
                             </div>
                             <div class="flex-1">
-                                <p class="text-xs font-semibold text-emerald-800">Trading Available</p>
+                                <p class="text-xs font-semibold text-emerald-800">✅ Trading Available</p>
+                                <p class="text-xs text-emerald-600 mt-1">
+                                    ${{ number_format($portfolio->available_balance, 2) }} available for new positions
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -329,24 +404,45 @@
                                 <i class="fas fa-exclamation-triangle text-white text-xs"></i>
                             </div>
                             <div class="flex-1">
-                                <p class="text-xs font-semibold text-amber-800">Trading Limited</p>
+                                <p class="text-xs font-semibold text-amber-800">⚠️ Trading Limited</p>
+                                <p class="text-xs text-amber-600 mt-1">
+                                    @if($portfolio->available_balance <= 0)
+                                        Insufficient available balance
+                                    @elseif(!$portfolio->ai_trade_enabled)
+                                        AI trading is currently disabled
+                                    @elseif($portfolio->equity <= 0)
+                                        Portfolio equity is too low
+                                    @else
+                                        Trading temporarily unavailable
+                                    @endif
+                                </p>
                             </div>
                         </div>
                     </div>
                     @endif
 
                     <!-- AI Activity Stats -->
-                    <div class="grid grid-cols-2 gap-2 text-center">
+                    <div class="grid grid-cols-3 gap-2 text-center">
                         <div class="bg-white rounded-xl p-2 border border-gray-200">
                             <div class="text-sm font-bold text-blue-600">{{ $this->openPositionsCount }}</div>
-                            <div class="text-xs text-gray-500">Open</div>
+                            <div class="text-xs text-gray-500">Open Positions</div>
                         </div>
                         <div class="bg-white rounded-xl p-2 border border-gray-200">
                             <div class="text-sm font-bold text-purple-600">{{ $aiDecisions->count() }}</div>
                             <div class="text-xs text-gray-500">AI Decisions</div>
                         </div>
+                        <div class="bg-white rounded-xl p-2 border border-gray-200">
+                            <div class="text-sm font-bold text-green-600">{{ $this->advancedWinRate['total_trades'] }}</div>
+                            <div class="text-xs text-gray-500">Total Trades</div>
+                        </div>
                     </div>
                 </div>
+
+                <p class="text-xs text-gray-600 mb-4 leading-relaxed">
+                    {{ $portfolio->ai_trade_enabled ? 
+                       'AI is actively monitoring markets and executing trades based on machine learning predictions and real-time analysis.' : 
+                       'AI trading is currently disabled. Enable to allow automated trading based on market analysis.' }}
+                </p>
                 
                 <button wire:click="toggleAiTrade" 
                         wire:loading.attr="disabled"
@@ -356,12 +452,12 @@
                                   'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border border-green-400' }} disabled:opacity-50">
                     <i class="fas {{ $portfolio->ai_trade_enabled ? 'fa-pause-circle' : 'fa-play-circle' }} text-sm"></i>
                     <span class="font-semibold text-sm">
-                        {{ $portfolio->ai_trade_enabled ? 'Disable AI' : 'Enable AI' }}
+                        {{ $portfolio->ai_trade_enabled ? 'Disable AI Trading' : 'Enable AI Trading' }}
                     </span>
                 </button>
             </div>
 
-            <!-- Risk Management Card - Compact -->
+            <!-- Risk Management Card - Compact with Details -->
             <div class="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 p-5 hover:shadow-xl transition-all duration-300 group">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-base font-bold text-gray-900 flex items-center space-x-3">
@@ -384,6 +480,7 @@
                         <div class="flex items-center justify-between mb-2">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-700">Risk per Trade</label>
+                                <p class="text-xs text-gray-500 mt-1">Max risk per position</p>
                             </div>
                             <span class="text-lg font-bold text-blue-600">{{ $portfolio->risk_value }}%</span>
                         </div>
@@ -392,47 +489,69 @@
                                  style="width: {{ min($portfolio->risk_value, 100) }}%">
                             </div>
                         </div>
+                        <div class="flex justify-between text-xs text-gray-500 mt-2">
+                            <span>Conservative</span>
+                            <span>Aggressive</span>
+                        </div>
                     </div>
 
+                    <!-- Risk Level Description -->
+                    <div class="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-3 border border-gray-200">
+                        <h4 class="text-xs font-semibold text-gray-700 mb-1">Risk Level: {{ $portfolio->risk_mode }}</h4>
+                        <p class="text-xs text-gray-600 leading-relaxed">
+                            @if($portfolio->risk_mode === 'CONSERVATIVE')
+                            Focuses on capital preservation with smaller position sizes and lower risk exposure.
+                            @elseif($portfolio->risk_mode === 'MODERATE')
+                            Balanced approach with moderate position sizes for steady growth.
+                            @else
+                            Aggressive strategy with larger position sizes for higher potential returns.
+                            @endif
+                        </p>
+                    </div>
+
+                    <!-- Utilization Warning -->
                     @if($portfolio->is_over_utilized)
-                    <div class="p-2 bg-red-50 border border-red-200 rounded-lg">
-                        <div class="flex items-center space-x-1 text-red-700">
+                    <div class="p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <div class="flex items-center space-x-2 text-red-700">
                             <i class="fas fa-exclamation-circle text-xs"></i>
-                            <span class="text-xs font-semibold">High Utilization</span>
+                            <span class="text-xs font-semibold">High Utilization Warning</span>
                         </div>
+                        <p class="text-xs text-red-600 mt-1">
+                            Consider closing some positions to free up balance. Current utilization: {{ number_format($portfolio->utilization_percentage, 1) }}%
+                        </p>
                     </div>
                     @endif
                 </div>
             </div>
         </div>
 
-        <!-- Control Panel - Compact -->
+        <!-- Control Panel - Compact with Full Labels -->
         <div class="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 p-5 mb-6 hover:shadow-xl transition-all duration-300">
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-5">
                 <h2 class="text-base font-bold text-gray-900 flex items-center space-x-3 mb-3 lg:mb-0">
                     <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center shadow-lg">
                         <i class="fas fa-sliders-h text-white text-xs"></i>
                     </div>
-                    <span class="bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Controls</span>
+                    <span class="bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Portfolio Controls</span>
                 </h2>
                 <div class="flex flex-wrap gap-2">
                     <button wire:click="refreshPortfolio" 
                             wire:loading.attr="disabled"
                             class="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transition-all duration-300 font-semibold shadow-sm hover:shadow transform hover:-translate-y-0.5 flex items-center space-x-2 text-xs border border-blue-400 disabled:opacity-50">
                         <i class="fas fa-sync-alt text-xs"></i>
-                        <span>Refresh</span>
+                        <span>Refresh Data</span>
                     </button>
                     <button wire:click="resetPortfolio" 
                             wire:confirm="Are you sure you want to reset your portfolio? All positions will be closed and balance reset to initial amount."
                             class="px-3 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white rounded-lg transition-all duration-300 font-semibold shadow-sm hover:shadow transform hover:-translate-y-0.5 flex items-center space-x-2 text-xs border border-yellow-400">
                         <i class="fas fa-redo text-xs"></i>
-                        <span>Reset</span>
+                        <span>Reset Portfolio</span>
                     </button>
                     <button wire:click="closeAllPositions"
                             wire:confirm="Are you sure you want to close ALL open positions?"
                             class="px-3 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-lg transition-all duration-300 font-semibold shadow-sm hover:shadow transform hover:-translate-y-0.5 flex items-center space-x-2 text-xs border border-red-400">
                         <i class="fas fa-fire-extinguisher text-xs"></i>
-                        <span>Close All</span>
+                        <span>Close All Positions</span>
                     </button>
                 </div>
             </div>
@@ -442,7 +561,7 @@
                 <div class="group">
                     <label class="block text-xs font-semibold text-gray-700 mb-2 flex items-center space-x-2">
                         <i class="fas fa-wallet text-gray-500 text-xs"></i>
-                        <span>Initial Balance</span>
+                        <span>Initial Balance ($)</span>
                     </label>
                     <input type="number" step="0.01" wire:model="initialBalance" 
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400 transition-all duration-300 bg-white text-xs group-hover:border-blue-400 shadow-sm">
@@ -478,7 +597,7 @@
                             wire:loading.attr="disabled"
                             class="w-full px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg transition-all duration-300 font-semibold shadow-sm hover:shadow transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 text-xs border border-green-400 disabled:opacity-50">
                         <i class="fas fa-save text-xs"></i>
-                        <span class="font-semibold">Save</span>
+                        <span class="font-semibold">Save Changes</span>
                     </button>
                 </div>
             </div>
@@ -825,10 +944,6 @@
                                             <p class="text-sm text-gray-800 leading-relaxed">{{ $recommendation }}</p>
                                             <div class="flex items-center justify-between mt-3">
                                                 <span class="text-xs text-indigo-600 font-semibold">AI Suggestion</span>
-                                                <button wire:click="applyOptimization({{ $index }})" 
-                                                        class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg transition-colors duration-200 font-semibold">
-                                                    Apply
-                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -997,25 +1112,6 @@
         </div>
         @endif
 
-        <!-- Debug Panel (Hidden by default) -->
-        <div class="mt-8 text-center">
-            <button onclick="document.getElementById('debugPanel').classList.toggle('hidden')" 
-                    class="text-xs text-gray-500 hover:text-gray-700 transition-colors duration-200">
-                <i class="fas fa-bug mr-1"></i>
-                Toggle Debug Info
-            </button>
-        </div>
-
-        <div id="debugPanel" class="hidden mt-4 bg-gray-900 text-gray-200 rounded-2xl p-6 font-mono text-sm">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold">Debug Information</h3>
-                <button wire:click="debugPortfolio" 
-                        class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs">
-                    Refresh Debug
-                </button>
-            </div>
-            <pre>{{ json_encode($this->portfolio_summary, JSON_PRETTY_PRINT) }}</pre>
-        </div>
     </div>
 </div>
 

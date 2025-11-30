@@ -3,7 +3,7 @@
   <div class="flex items-center justify-between w-full px-4 py-1 mx-auto flex-wrap-inherit">
     
     <!-- Running Text Section - AI Decisions (Transparent) -->
-    <div class="flex items-center flex-1 min-w-0 lg:mr-4" style="max-width: calc(100% - 320px);">
+    <div class="flex items-center flex-1 min-w-0 lg:mr-4" style="max-width: calc(100% - 240px);">
       <div class="relative overflow-hidden w-full bg-transparent rounded-xl px-4 lg:px-6 py-2 lg:py-3">
         <div class="flex items-center">
           <!-- Icon Exchange yang bisa diklik untuk mobile menu -->
@@ -66,7 +66,7 @@
       </div>
     </div>
     <!-- Notifications & User Actions -->
-    <div class="flex items-center justify-end" style="min-width: 320px;">
+    <div class="flex items-center justify-end" style="min-width: 240px;">
       <ul class="flex flex-row justify-end pl-0 mb-0 list-none items-center space-x-2">
         
         <!-- 🔔 BELL ICON - AI SIGNALS -->
