@@ -80,46 +80,46 @@
             </div>
           </a>
 
-          <!-- AI Signals Dropdown -->
-          <div id="ai-signal-dropdown" class="hidden absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200/80 backdrop-blur-lg z-50 transform origin-top-right transition-all duration-300 scale-95 opacity-0">
-            <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 via-pink-50 to-red-50 rounded-t-2xl">
-              <div class="flex justify-between items-center">
-                <div class="flex items-center space-x-3">
-                  <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <i class="fa-solid fa-money-bill-trend-up text-white text-sm"></i>
+          <!-- AI Signals Dropdown - RESPONSIVE -->
+          <div id="ai-signal-dropdown" class="hidden absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200/80 backdrop-blur-lg z-50 transform origin-top-right transition-all duration-300 scale-95 opacity-0 mobile-dropdown">
+              <div class="px-4 lg:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 via-pink-50 to-red-50 rounded-t-2xl">
+                  <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 lg:gap-0">
+                      <div class="flex items-center space-x-3">
+                          <div class="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                              <i class="fa-solid fa-money-bill-trend-up text-white text-xs lg:text-sm"></i>
+                          </div>
+                          <div>
+                              <h3 class="font-bold text-gray-800 text-sm">AI Signals</h3>
+                              <p class="text-xs text-gray-600 hidden lg:block">Real-time trading signals</p>
+                          </div>
+                      </div>
+                      <div class="flex items-center space-x-2 self-end lg:self-auto">
+                          <span id="ai-signal-count" class="text-xs bg-purple-500 text-white px-2 py-1 rounded-full">0</span>
+                          <button onclick="clearAISignals()" class="text-xs text-purple-600 hover:text-purple-800 font-medium transition-colors duration-200">Clear</button>
+                      </div>
                   </div>
-                  <div>
-                    <h3 class="font-bold text-gray-800 text-sm">AI Signals</h3>
-                    <p class="text-xs text-gray-600">Real-time trading signals</p>
-                  </div>
-                </div>
-                <div class="flex items-center space-x-2">
-                  <span id="ai-signal-count" class="text-xs bg-purple-500 text-white px-2 py-1 rounded-full">0</span>
-                  <button onclick="clearAISignals()" class="text-xs text-purple-600 hover:text-purple-800 font-medium transition-colors duration-200">Clear</button>
-                </div>
               </div>
-            </div>
-            
-            <div class="max-h-80 overflow-y-auto custom-scrollbar">
-              <div id="ai-signal-list">
-                <div class="px-6 py-8 text-center">
-                  <div class="w-16 h-16 bg-gradient-to-br from-purple-100 to-pink-200 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
-                    <i class="fa-solid fa-bell text-purple-300 text-xl"></i>
+              
+              <div class="max-h-64 lg:max-h-80 overflow-y-auto custom-scrollbar">
+                  <div id="ai-signal-list">
+                      <div class="px-4 lg:px-6 py-6 lg:py-8 text-center">
+                          <div class="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-purple-100 to-pink-200 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                              <i class="fa-solid fa-bell text-purple-300 text-lg lg:text-xl"></i>
+                          </div>
+                          <p class="text-gray-500 text-sm font-medium">No AI signals yet</p>
+                          <p class="text-gray-400 text-xs mt-1 hidden lg:block">AI trading alerts will appear here</p>
+                      </div>
                   </div>
-                  <p class="text-gray-500 text-sm font-medium">No AI signals yet</p>
-                  <p class="text-gray-400 text-xs mt-1">AI trading alerts will appear here</p>
-                </div>
               </div>
-            </div>
 
-            <div class="px-6 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-              <div class="flex justify-between items-center text-xs text-gray-500">
-                <span>AI Trading Signals</span>
-                <span id="ai-last-update">Just now</span>
+              <div class="px-4 lg:px-6 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                  <div class="flex justify-between items-center text-xs text-gray-500">
+                      <span class="hidden lg:inline">AI Trading Signals</span>
+                      <span class="lg:hidden">AI Signals</span>
+                      <span id="ai-last-update">Just now</span>
+                  </div>
               </div>
-            </div>
           </div>
-        </li>
 
         <!-- ⚙️ SETTINGS ICON - TRADE EXECUTIONS -->
         <li class="relative flex items-center">
@@ -132,46 +132,46 @@
             </div>
           </a>
 
-          <!-- Trade Executions Dropdown -->
-          <div id="trade-dropdown" class="hidden absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200/80 backdrop-blur-lg z-50 transform origin-top-right transition-all duration-300 scale-95 opacity-0">
-            <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-green-50 to-emerald-50 rounded-t-2xl">
-              <div class="flex justify-between items-center">
-                <div class="flex items-center space-x-3">
-                  <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <i class="fas fa-exchange-alt text-white text-sm"></i>
+          <!-- Trade Executions Dropdown - RESPONSIVE -->
+          <div id="trade-dropdown" class="hidden absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200/80 backdrop-blur-lg z-50 transform origin-top-right transition-all duration-300 scale-95 opacity-0 mobile-dropdown">
+              <div class="px-4 lg:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-green-50 to-emerald-50 rounded-t-2xl">
+                  <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 lg:gap-0">
+                      <div class="flex items-center space-x-3">
+                          <div class="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                              <i class="fas fa-exchange-alt text-white text-xs lg:text-sm"></i>
+                          </div>
+                          <div>
+                              <h3 class="font-bold text-gray-800 text-sm">Trade Executions</h3>
+                              <p class="text-xs text-gray-600 hidden lg:block">Position opens & closes</p>
+                          </div>
+                      </div>
+                      <div class="flex items-center space-x-2 self-end lg:self-auto">
+                          <span id="trade-count" class="text-xs bg-blue-500 text-white px-2 py-1 rounded-full">0</span>
+                          <button onclick="clearTradeNotifications()" class="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200">Clear</button>
+                      </div>
                   </div>
-                  <div>
-                    <h3 class="font-bold text-gray-800 text-sm">Trade Executions</h3>
-                    <p class="text-xs text-gray-600">Position opens & closes</p>
-                  </div>
-                </div>
-                <div class="flex items-center space-x-2">
-                  <span id="trade-count" class="text-xs bg-blue-500 text-white px-2 py-1 rounded-full">0</span>
-                  <button onclick="clearTradeNotifications()" class="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200">Clear</button>
-                </div>
               </div>
-            </div>
-            
-            <div class="max-h-80 overflow-y-auto custom-scrollbar">
-              <div id="trade-list">
-                <div class="px-6 py-8 text-center">
-                  <div class="w-16 h-16 bg-gradient-to-br from-blue-100 to-green-200 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
-                    <i class="fas fa-solid fa-chart-column text-blue-300 text-xl"></i>
+              
+              <div class="max-h-64 lg:max-h-80 overflow-y-auto custom-scrollbar">
+                  <div id="trade-list">
+                      <div class="px-4 lg:px-6 py-6 lg:py-8 text-center">
+                          <div class="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-blue-100 to-green-200 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                              <i class="fas fa-solid fa-chart-column text-blue-300 text-lg lg:text-xl"></i>
+                          </div>
+                          <p class="text-gray-500 text-sm font-medium">No trade executions yet</p>
+                          <p class="text-gray-400 text-xs mt-1 hidden lg:block">Trade activities will appear here</p>
+                      </div>
                   </div>
-                  <p class="text-gray-500 text-sm font-medium">No trade executions yet</p>
-                  <p class="text-gray-400 text-xs mt-1">Trade activities will appear here</p>
-                </div>
               </div>
-            </div>
 
-            <div class="px-6 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-              <div class="flex justify-between items-center text-xs text-gray-500">
-                <span>Virtual Trading Activities</span>
-                <span id="trade-last-update">Just now</span>
+              <div class="px-4 lg:px-6 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                  <div class="flex justify-between items-center text-xs text-gray-500">
+                      <span class="hidden lg:inline">Virtual Trading Activities</span>
+                      <span class="lg:hidden">Trades</span>
+                      <span id="trade-last-update">Just now</span>
+                  </div>
               </div>
-            </div>
           </div>
-        </li>
 
         <!-- User Status Badge & Dropdown -->
         <li class="relative flex items-center">
@@ -385,25 +385,34 @@ function closeMobileSidebar() {
 
 // Add responsive styles for mobile sidebar
 const mobileSidebarStyles = `
-@media (max-width: 1200px) {
-    .interactive-sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease-in-out;
+/* Mobile Dropdown Responsive Fix */
+@media (max-width: 768px) {
+    .mobile-dropdown {
+        width: 90vw !important;
+        max-width: 320px !important;
+        right: 50% !important;
+        transform: translateX(50%) scale(0.95) !important;
     }
     
-    .interactive-sidebar.mobile-open {
-        transform: translateX(0);
-        box-shadow: 0 0 50px rgba(0, 0, 0, 0.3);
+    .mobile-dropdown.scale-100 {
+        transform: translateX(50%) scale(1) !important;
     }
     
-    #sidebar-overlay {
-        backdrop-filter: blur(4px);
+    .mobile-dropdown.scale-95 {
+        transform: translateX(50%) scale(0.95) !important;
     }
 }
 
-/* Ensure sidebar is above other content */
-.interactive-sidebar {
-    z-index: 999;
+@media (max-width: 640px) {
+    .mobile-dropdown {
+        width: 95vw !important;
+        max-width: 300px !important;
+    }
+}
+
+/* Ensure dropdowns stay on top */
+.mobile-dropdown {
+    z-index: 1000 !important;
 }
 `;
 
