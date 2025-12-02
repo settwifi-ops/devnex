@@ -69,7 +69,7 @@ class RealTradingPage extends Component
     {
         $this->realTradingService = app(RealTradingExecutionService::class);
         $this->tradingService = app(RealTradingExecutionService::class);
-        $this->tradingCache = app(TradingCacheService::class)
+        $this->tradingCache = app(TradingCacheService::class);
     }
 
     public function mount()
