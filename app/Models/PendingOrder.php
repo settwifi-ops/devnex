@@ -39,7 +39,31 @@ class PendingOrder extends Model
     {
         return $this->belongsTo(AiDecision::class);
     }
+    // app/Models/PendingOrder.php
+    // Tambahkan method ini ke model yang sudah ada:
 
+    public function canCreatePosition()
+    {
+        return $this->order_status === 'FILLED' 
+            && $this->executed_qty > 0;
+    }
+
+    public function getFormattedStatusAttribute()
+    {
+        $status = strtoupper($this->status);
+        $colors = [
+            'PENDING' => 'orange',
+            'FILLED' => 'green', 
+            'CANCELLED' => 'red',
+            'EXPIRED' => 'gray',
+            'PARTIALLY_FILLED' => 'yellow'
+        ];
+        
+        return [
+            'text' => $status,
+            'color' => $colors[$status] ?? 'gray'
+        ];
+    }
     // Scopes
     public function scopePending($query)
     {

@@ -8,6 +8,7 @@ use App\Models\PendingOrder;
 use App\Services\BinanceAccountService;
 use App\Services\RealTradingExecutionService;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class RealTradingPage extends Component
 {
@@ -42,9 +43,21 @@ class RealTradingPage extends Component
     public $refreshingOrders = false;
     public $cancellingOrderId = null;
 
+    // Trading positions langsung dari Binance
+    public $binancePositions = [];
+    public $activePositionsCount = 0;
+    public $totalUnrealizedPnl = 0;
+    public $loadingPositions = false;
+    public $closingPositionId = null;
+
     // Confirmation modals
     public $showCancelConfirm = false;
     public $orderToCancel = null;
+    public $showCloseConfirm = false;
+    public $positionToClose = null;
+
+    // Tabs
+    public $activeTab = 'active';
 
     // Real trading execution service
     protected $realTradingService;
@@ -60,13 +73,15 @@ class RealTradingPage extends Component
         $this->forceLoadUserData();
         $this->loadUserAccounts();
         $this->loadPendingOrders();
+        $this->loadBinancePositions();
         
         Log::info("🔍 MOUNT - Initial State", [
             'user_id' => $this->user->id,
             'has_subscription' => $this->hasRealSubscription,
             'binance_connected' => $this->binanceConnected,
             'trading_enabled' => $this->realTradingEnabled,
-            'pending_orders' => $this->pendingOrdersCount
+            'pending_orders' => $this->pendingOrdersCount,
+            'binance_positions' => count($this->binancePositions)
         ]);
     }
 
@@ -145,20 +160,23 @@ class RealTradingPage extends Component
     {
         try {
             $this->pendingOrders = PendingOrder::where('user_id', $this->user->id)
-                ->whereIn('status', ['PENDING', 'PARTIALLY_FILLED', 'NEW']) // Tambah NEW
                 ->where(function($query) {
-                    $query->where('order_status', 'NEW')
-                          ->orWhere('order_status', 'PARTIALLY_FILLED')
-                          ->orWhereNull('order_status'); // Untuk yang belum di-update
+                    $query->whereIn('status', ['PENDING', 'PARTIALLY_FILLED', 'NEW'])
+                          ->orWhere(function($q) {
+                              $q->where('status', 'FILLED')
+                                ->where(function($sq) {
+                                    $sq->whereNull('order_status')
+                                       ->orWhereNotIn('order_status', ['FILLED', 'CANCELLED']);
+                                });
+                          });
+                })
+                ->where(function($query) {
+                    $query->whereNull('order_status')
+                          ->orWhereNotIn('order_status', ['FILLED', 'CANCELLED']);
                 })
                 ->with('aiDecision')
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->filter(function ($order) {
-                    // FILTER TAMBAHAN: Pastikan tidak FILLED di Binance
-                    $binanceStatus = strtoupper($order->order_status ?? '');
-                    return !in_array($binanceStatus, ['FILLED', 'EXECUTED', 'CANCELLED']);
-                })
                 ->map(function ($order) {
                     return [
                         'id' => $order->id,
@@ -168,7 +186,9 @@ class RealTradingPage extends Component
                         'limit_price' => $order->limit_price,
                         'quantity' => $order->quantity,
                         'status' => $order->status,
-                        'order_status' => $order->order_status, // ← INI PENTING!
+                        'order_status' => $order->order_status,
+                        'executed_qty' => $order->executed_qty,
+                        'avg_price' => $order->avg_price,
                         'binance_order_id' => $order->binance_order_id,
                         'created_at' => $order->created_at->format('Y-m-d H:i:s'),
                         'expires_at' => $order->expires_at ? $order->expires_at->format('Y-m-d H:i:s') : null,
@@ -184,10 +204,9 @@ class RealTradingPage extends Component
                 
             $this->pendingOrdersCount = count($this->pendingOrders);
             
-            Log::info("📦 PENDING ORDERS LOADED (Filtered)", [
+            Log::info("📦 PENDING ORDERS LOADED", [
                 'user_id' => $this->user->id,
-                'count' => $this->pendingOrdersCount,
-                'statuses' => array_column($this->pendingOrders, 'order_status')
+                'count' => $this->pendingOrdersCount
             ]);
             
         } catch (\Exception $e) {
@@ -198,20 +217,116 @@ class RealTradingPage extends Component
     }
 
     /**
-     * Refresh pending orders
+     * Load trading positions langsung dari Binance API
+     */
+    public function loadBinancePositions()
+    {
+        $this->loadingPositions = true;
+        
+        try {
+            if (!$this->binanceConnected) {
+                $this->binancePositions = [];
+                $this->activePositionsCount = 0;
+                $this->totalUnrealizedPnl = 0;
+                return;
+            }
+            
+            $binanceService = app(BinanceAccountService::class);
+            $binance = $binanceService->getBinanceInstance($this->user->id);
+            
+            // 1. Get all open positions from Binance
+            $positions = $binance->futuresPositionRisk();
+            
+            // 2. Filter hanya yang ada positionAmount (ada posisi terbuka)
+            $activePositions = array_filter($positions, function($position) {
+                return (float) $position['positionAmt'] != 0;
+            });
+            
+            // 3. Format data
+            $formattedPositions = [];
+            $totalUnrealizedPnl = 0;
+            
+            foreach ($activePositions as $position) {
+                $positionAmt = (float) $position['positionAmt'];
+                $entryPrice = (float) $position['entryPrice'];
+                $markPrice = (float) $position['markPrice'];
+                $unrealizedProfit = (float) $position['unRealizedProfit'];
+                
+                // Determine side (positive amount = LONG, negative = SHORT)
+                $side = $positionAmt > 0 ? 'BUY' : 'SELL';
+                $positionType = $positionAmt > 0 ? 'LONG' : 'SHORT';
+                $quantity = abs($positionAmt);
+                
+                // Calculate P&L percentage
+                $pnlPercentage = $entryPrice > 0 ? ($unrealizedProfit / ($entryPrice * $quantity)) * 100 : 0;
+                
+                $formattedPosition = [
+                    'symbol' => $position['symbol'],
+                    'side' => $side,
+                    'position_type' => $positionType,
+                    'entry_price' => $entryPrice,
+                    'mark_price' => $markPrice,
+                    'quantity' => $quantity,
+                    'unrealized_pnl' => $unrealizedProfit,
+                    'pnl_percentage' => $pnlPercentage,
+                    'leverage' => (int) $position['leverage'],
+                    'liquidation_price' => (float) $position['liquidationPrice'],
+                    'margin_type' => $position['marginType'],
+                    'isolated_margin' => (float) $position['isolatedMargin'],
+                    'position_side' => $position['positionSide'],
+                    'index' => count($formattedPositions) // Untuk reference di modal
+                ];
+                
+                $formattedPositions[] = $formattedPosition;
+                $totalUnrealizedPnl += $unrealizedProfit;
+            }
+            
+            // 4. Sort by unrealized P&L (biggest losers first, then winners)
+            usort($formattedPositions, function($a, $b) {
+                return $a['unrealized_pnl'] <=> $b['unrealized_pnl'];
+            });
+            
+            $this->binancePositions = $formattedPositions;
+            $this->activePositionsCount = count($formattedPositions);
+            $this->totalUnrealizedPnl = $totalUnrealizedPnl;
+            
+            Log::info("📊 BINANCE POSITIONS LOADED", [
+                'user_id' => $this->user->id,
+                'count' => $this->activePositionsCount,
+                'total_unrealized_pnl' => $totalUnrealizedPnl
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error("❌ Failed to load Binance positions: " . $e->getMessage());
+            $this->binancePositions = [];
+            $this->activePositionsCount = 0;
+            $this->totalUnrealizedPnl = 0;
+            session()->flash('error', 'Failed to load positions from Binance: ' . $e->getMessage());
+        }
+        
+        $this->loadingPositions = false;
+    }
+
+    /**
+     * Refresh pending orders and auto-clean filled ones
      */
     public function refreshPendingOrders()
     {
         $this->refreshingOrders = true;
         
         try {
-            // 1. Cek status di Binance untuk semua pending orders
+            if (!$this->binanceConnected) {
+                session()->flash('error', 'Binance not connected');
+                $this->refreshingOrders = false;
+                return;
+            }
+            
             $binanceService = app(BinanceAccountService::class);
             $binance = $binanceService->getBinanceInstance($this->user->id);
             
             // Ambil semua pending orders
             $pendingOrders = PendingOrder::where('user_id', $this->user->id)
-                ->whereIn('status', ['PENDING', 'PARTIALLY_FILLED', 'NEW'])
+                ->whereIn('status', ['PENDING', 'PARTIALLY_FILLED', 'NEW', 'FILLED'])
                 ->get();
             
             $filledCount = 0;
@@ -219,7 +334,6 @@ class RealTradingPage extends Component
             
             foreach ($pendingOrders as $order) {
                 try {
-                    // Skip jika tidak ada binance_order_id
                     if (!$order->binance_order_id) continue;
                     
                     // Cek status di Binance
@@ -230,29 +344,24 @@ class RealTradingPage extends Component
                     
                     $orderStatus = $binanceStatus['status'] ?? 'UNKNOWN';
                     $executedQty = $binanceStatus['executedQty'] ?? 0;
+                    $avgPrice = $binanceStatus['avgPrice'] ?? 0;
                     
                     // Update status lokal
                     $order->update([
                         'order_status' => $orderStatus,
                         'executed_qty' => $executedQty,
-                        'avg_price' => $binanceStatus['avgPrice'] ?? 0,
+                        'avg_price' => $avgPrice,
                         'last_checked' => now()
                     ]);
                     
                     // Jika sudah FILLED di Binance
-                    if ($orderStatus === 'FILLED') {
+                    if ($orderStatus === 'FILLED' && $order->status !== 'FILLED') {
                         $order->update(['status' => 'FILLED']);
                         $filledCount++;
-                        
-                        // Tambah notes
-                        $order->update([
-                            'notes' => 'Auto-filled at ' . now()->format('Y-m-d H:i:s') . 
-                                      ' | Price: $' . ($binanceStatus['avgPrice'] ?? 'N/A')
-                        ]);
                     }
                     
                     // Jika CANCELLED di Binance
-                    if ($orderStatus === 'CANCELLED') {
+                    if ($orderStatus === 'CANCELLED' && $order->status !== 'CANCELLED') {
                         $order->update(['status' => 'CANCELLED']);
                         $cancelledCount++;
                     }
@@ -262,13 +371,18 @@ class RealTradingPage extends Component
                 }
             }
             
-            // 2. Check expired orders via service
-            $expiredCount = $this->realTradingService->checkPendingOrders();
+            // Check expired orders via service
+            $expiredCount = 0;
+            if ($this->realTradingService) {
+                $expiredCount = $this->realTradingService->checkPendingOrders();
+            }
             
-            // 3. Reload orders
+            // Reload data
             $this->loadPendingOrders();
+            $this->loadBinancePositions();
             
-            $message = 'Pending orders refreshed!';
+            // Tampilkan message
+            $message = 'Orders refreshed!';
             if ($filledCount > 0) $message .= " {$filledCount} order(s) filled.";
             if ($cancelledCount > 0) $message .= " {$cancelledCount} order(s) cancelled.";
             if ($expiredCount > 0) $message .= " {$expiredCount} order(s) expired.";
@@ -281,6 +395,166 @@ class RealTradingPage extends Component
         
         $this->refreshingOrders = false;
     }
+
+    /**
+     * Close position langsung di Binance
+     */
+    public function closePosition($positionData)
+    {
+        $this->closingPositionId = $positionData['symbol'];
+        
+        try {
+            if (!$this->binanceConnected) {
+                throw new \Exception('Binance not connected');
+            }
+            
+            $binanceService = app(BinanceAccountService::class);
+            $binance = $binanceService->getBinanceInstance($this->user->id);
+            
+            $symbol = $positionData['symbol'];
+            $quantity = $positionData['quantity'];
+            $side = $positionData['side'];
+            
+            // Determine order side (opposite of position)
+            $orderSide = $side === 'BUY' ? 'SELL' : 'BUY';
+            
+            // Get current price untuk market order
+            $ticker = $binance->futuresPrices();
+            $currentPrice = null;
+            
+            foreach ($ticker as $item) {
+                if ($item['symbol'] === $symbol) {
+                    $currentPrice = (float) $item['price'];
+                    break;
+                }
+            }
+            
+            if (!$currentPrice) {
+                throw new \Exception("Failed to get current price for {$symbol}");
+            }
+            
+            // Place market order to close position
+            $order = $binance->futuresNewOrder([
+                'symbol' => $symbol,
+                'side' => $orderSide,
+                'type' => 'MARKET',
+                'quantity' => $quantity,
+                'reduceOnly' => true,
+            ]);
+            
+            Log::info("📤 CLOSE POSITION ORDER", [
+                'symbol' => $symbol,
+                'side' => $orderSide,
+                'quantity' => $quantity,
+                'order_id' => $order['orderId'] ?? 'N/A',
+                'price' => $currentPrice
+            ]);
+            
+            // Tunggu sebentar lalu reload positions
+            sleep(2);
+            $this->loadBinancePositions();
+            $this->loadPendingOrders();
+            
+            session()->flash('message', 
+                "Position {$symbol} closed successfully! " .
+                "Market order placed at $" . number_format($currentPrice, 4)
+            );
+            
+        } catch (\Exception $e) {
+            session()->flash('error', 'Failed to close position: ' . $e->getMessage());
+            Log::error("❌ Close Position Error: " . $e->getMessage());
+        } finally {
+            $this->closingPositionId = null;
+        }
+    }
+
+    /**
+     * Confirm position close
+     */
+    public function confirmClosePosition($positionIndex)
+    {
+        if (!isset($this->binancePositions[$positionIndex])) {
+            session()->flash('error', 'Position not found');
+            return;
+        }
+        
+        $this->positionToClose = $this->binancePositions[$positionIndex];
+        $this->showCloseConfirm = true;
+    }
+
+    /**
+     * Close position confirmed
+     */
+    public function closePositionConfirmed()
+    {
+        if (!$this->positionToClose) {
+            session()->flash('error', 'No position selected');
+            $this->showCloseConfirm = false;
+            return;
+        }
+        
+        $this->closePosition($this->positionToClose);
+        $this->positionToClose = null;
+        $this->showCloseConfirm = false;
+    }
+
+    /**
+     * Close confirmation modal
+     */
+    public function closeCloseConfirm()
+    {
+        $this->showCloseConfirm = false;
+        $this->positionToClose = null;
+    }
+
+    /**
+     * Check order status on Binance
+     */
+    public function checkOrderStatus($orderId)
+    {
+        try {
+            $order = PendingOrder::find($orderId);
+            
+            if (!$order || $order->user_id != $this->user->id) {
+                session()->flash('error', 'Order not found');
+                return;
+            }
+            
+            $binanceService = app(BinanceAccountService::class);
+            $binance = $binanceService->getBinanceInstance($this->user->id);
+            
+            // Get order status from Binance
+            $orderStatus = $binance->futuresGetOrder([
+                'symbol' => $order->symbol,
+                'orderId' => $order->binance_order_id
+            ]);
+            
+            // Update local status
+            $order->update([
+                'order_status' => $orderStatus['status'] ?? 'UNKNOWN',
+                'executed_qty' => $orderStatus['executedQty'] ?? 0,
+                'avg_price' => $orderStatus['avgPrice'] ?? 0,
+                'last_checked' => now()
+            ]);
+            
+            // If order is FILLED, update status
+            if (($orderStatus['status'] ?? '') === 'FILLED') {
+                $order->update(['status' => 'FILLED']);
+            }
+            
+            $this->loadPendingOrders();
+            $this->loadBinancePositions();
+            
+            session()->flash('info', 
+                "Order Status: {$orderStatus['status']} | " .
+                "Filled: {$orderStatus['executedQty']}/{$orderStatus['origQty']}"
+            );
+            
+        } catch (\Exception $e) {
+            session()->flash('error', 'Status check failed: ' . $e->getMessage());
+        }
+    }
+
     /**
      * Confirm order cancellation
      */
@@ -385,67 +659,29 @@ class RealTradingPage extends Component
     }
 
     /**
-     * Check order status on Binance
-     */
-    public function checkOrderStatus($orderId)
-    {
-        try {
-            $order = PendingOrder::find($orderId);
-            
-            if (!$order || $order->user_id != $this->user->id) {
-                session()->flash('error', 'Order not found');
-                return;
-            }
-            
-            $binanceService = app(BinanceAccountService::class);
-            $binance = $binanceService->getBinanceInstance($this->user->id);
-            
-            // Get order status from Binance
-            $orderStatus = $binance->futuresGetOrder([
-                'symbol' => $order->symbol,
-                'orderId' => $order->binance_order_id
-            ]);
-            
-            // Update local status
-            $order->update([
-                'order_status' => $orderStatus['status'] ?? 'UNKNOWN',
-                'executed_qty' => $orderStatus['executedQty'] ?? 0,
-                'avg_price' => $orderStatus['avgPrice'] ?? 0,
-                'last_checked' => now()
-            ]);
-            
-            // If order is FILLED, update status
-            if (($orderStatus['status'] ?? '') === 'FILLED') {
-                $order->update(['status' => 'FILLED']);
-            }
-            
-            $this->loadPendingOrders();
-            
-            session()->flash('info', 
-                "Order Status: {$orderStatus['status']} | " .
-                "Filled: {$orderStatus['executedQty']}/{$orderStatus['origQty']}"
-            );
-            
-        } catch (\Exception $e) {
-            session()->flash('error', 'Status check failed: ' . $e->getMessage());
-        }
-    }
-
-    /**
      * Get order summary
      */
     public function getOrderSummary($order)
     {
         $totalValue = $order['limit_price'] * $order['quantity'];
-        $timeLeft = $order['expires_at'] 
-            ? now()->diffInMinutes(\Carbon\Carbon::parse($order['expires_at']), false)
-            : null;
+        
+        if ($order['expires_at']) {
+            $expiresAt = Carbon::parse($order['expires_at']);
+            $timeLeft = now()->diffInMinutes($expiresAt, false);
+            $isExpired = $timeLeft <= 0;
+            $timeLeftText = $isExpired ? 'Expired' : ($timeLeft . ' minutes');
+        } else {
+            $timeLeft = null;
+            $isExpired = false;
+            $timeLeftText = 'No expiry';
+        }
         
         return [
             'total_value' => number_format($totalValue, 2),
-            'time_left' => $timeLeft > 0 ? $timeLeft . ' minutes' : 'Expired',
-            'is_expired' => $timeLeft !== null && $timeLeft <= 0,
-            'badge_color' => $this->getStatusBadgeColor($order['status'])
+            'time_left' => $timeLeftText,
+            'is_expired' => $isExpired,
+            'badge_color' => $this->getStatusBadgeColor($order['status']),
+            'order_status_color' => $this->getOrderStatusBadgeColor($order['order_status'] ?? '')
         ];
     }
 
@@ -468,6 +704,82 @@ class RealTradingPage extends Component
             default:
                 return 'light';
         }
+    }
+
+    /**
+     * Get badge color for Binance order status
+     */
+    private function getOrderStatusBadgeColor($orderStatus)
+    {
+        switch (strtoupper($orderStatus)) {
+            case 'NEW':
+                return 'blue';
+            case 'PARTIALLY_FILLED':
+                return 'yellow';
+            case 'FILLED':
+                return 'green';
+            case 'CANCELLED':
+                return 'red';
+            case 'REJECTED':
+                return 'red';
+            case 'EXPIRED':
+                return 'gray';
+            default:
+                return 'gray';
+        }
+    }
+
+    /**
+     * Get P&L badge color
+     */
+    public function getPnlBadgeColor($pnl)
+    {
+        if ($pnl > 0) return 'success';
+        if ($pnl < 0) return 'danger';
+        return 'secondary';
+    }
+
+    /**
+     * Format P&L with sign and color
+     */
+    public function formatPnl($pnl)
+    {
+        $sign = $pnl >= 0 ? '+' : '';
+        $color = $pnl >= 0 ? 'text-green-600' : 'text-red-600';
+        return [
+            'formatted' => $sign . '$' . number_format(abs($pnl), 2),
+            'color' => $color,
+            'sign' => $sign
+        ];
+    }
+
+    /**
+     * Switch tab
+     */
+    public function switchTab($tab)
+    {
+        $this->activeTab = $tab;
+    }
+
+    /**
+     * Refresh positions dari Binance
+     */
+    public function refreshPositions()
+    {
+        $this->loadBinancePositions();
+        session()->flash('info', 'Positions refreshed from Binance!');
+    }
+
+    /**
+     * Refresh semua data
+     */
+    public function refreshData()
+    {
+        $this->forceLoadUserData();
+        $this->loadUserAccounts();
+        $this->loadPendingOrders();
+        $this->loadBinancePositions();
+        session()->flash('message', 'All data refreshed successfully!');
     }
 
     public function upgradeToRealTrading()
@@ -521,6 +833,7 @@ class RealTradingPage extends Component
                 $this->forceLoadUserData();
                 $this->loadUserAccounts();
                 $this->loadPendingOrders();
+                $this->loadBinancePositions();
                 
                 session()->flash('message', 
                     "Binance " . ($isTestnet ? 'Testnet' : 'Live') . " connected! " .
@@ -600,9 +913,6 @@ class RealTradingPage extends Component
         $this->reset(['api_key', 'api_secret']);
     }
 
-    /**
-     * Account Management Methods
-     */
     public function toggleAccountManagement()
     {
         $this->showAccountManagement = !$this->showAccountManagement;
@@ -633,6 +943,7 @@ class RealTradingPage extends Component
                 $this->forceLoadUserData();
                 $this->loadUserAccounts();
                 $this->loadPendingOrders();
+                $this->loadBinancePositions();
                 $this->showAccountManagement = false;
                 
                 session()->flash('message', 
@@ -665,14 +976,6 @@ class RealTradingPage extends Component
         session()->flash('message', 'Switched to Live Trading mode. Enter your Mainnet API keys.');
     }
 
-    public function refreshData()
-    {
-        $this->forceLoadUserData();
-        $this->loadUserAccounts();
-        $this->loadPendingOrders();
-        session()->flash('message', 'Data refreshed successfully!');
-    }
-
     /**
      * Force redirect ke dashboard
      */
@@ -687,6 +990,7 @@ class RealTradingPage extends Component
         
         $this->forceLoadUserData();
         $this->loadPendingOrders();
+        $this->loadBinancePositions();
         session()->flash('message', 'Force redirect to dashboard completed!');
     }
 
@@ -722,7 +1026,9 @@ class RealTradingPage extends Component
             'binance_connected' => $this->binanceConnected,
             'trading_enabled' => $this->realTradingEnabled,
             'pending_orders' => $this->pendingOrdersCount,
-            'should_show_dashboard' => $this->hasRealSubscription && $this->binanceConnected
+            'binance_positions' => $this->activePositionsCount,
+            'total_unrealized_pnl' => $this->totalUnrealizedPnl,
+            'active_tab' => $this->activeTab
         ]);
 
         return view('livewire.real-trading-page')->layout('layouts.app');

@@ -1,6 +1,6 @@
 <!-- resources/views/livewire/real-trading-page.blade.php -->
 <div class="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
-    <div class="container mx-auto px-4 max-w-4xl">
+    <div class="container mx-auto px-4 max-w-6xl">
         
         <!-- Header -->
         <div class="text-center mb-8">
@@ -18,6 +18,12 @@
         @if (session()->has('error'))
             <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl mb-6">
                 {{ session('error') }}
+            </div>
+        @endif
+
+        @if (session()->has('info'))
+            <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl mb-6">
+                {{ session('info') }}
             </div>
         @endif
 
@@ -201,7 +207,7 @@
 
         @else
             <!-- REAL TRADING DASHBOARD -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
                 
                 <!-- Header dengan Account Management -->
                 <div class="text-center mb-8">
@@ -451,7 +457,7 @@
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                     <button 
                         wire:click="refreshBalance"
                         wire:loading.attr="disabled"
@@ -482,15 +488,29 @@
                     </a>
                     
                     <button 
-                        wire:click="refreshData"
-                        class="flex items-center justify-center space-x-2 bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                        wire:click="refreshPositions"
+                        wire:loading.attr="disabled"
+                        class="flex items-center justify-center space-x-2 bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors disabled:opacity-50"
                     >
-                        <i class="fas fa-chart-line mr-2"></i>
-                        <span>Refresh Data</span>
+                        @if($loadingPositions)
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            <span>Loading...</span>
+                        @else
+                            <i class="fas fa-chart-line mr-2"></i>
+                            <span>Refresh Positions</span>
+                        @endif
+                    </button>
+                    
+                    <button 
+                        wire:click="refreshData"
+                        class="flex items-center justify-center space-x-2 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                    >
+                        <i class="fas fa-redo mr-2"></i>
+                        <span>Refresh All</span>
                     </button>
                 </div>
 
-                <!-- ✅ IMPROVED: PENDING ORDERS SECTION -->
+                <!-- Pending Orders Section -->
                 @if($pendingOrdersCount > 0)
                 <div class="bg-white border border-orange-200 rounded-2xl p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
@@ -536,7 +556,7 @@
                                                 {{ $order['position_type'] }}
                                             </span>
                                             
-                                            <!-- ✅ BINANCE STATUS BADGE -->
+                                            <!-- BINANCE STATUS BADGE -->
                                             @if(isset($order['order_status']) && $order['order_status'])
                                             <span class="px-2 py-1 text-xs rounded-full 
                                                 {{ strtoupper($order['order_status']) === 'FILLED' ? 'bg-green-100 text-green-800' : 
@@ -654,7 +674,188 @@
                 </div>
                 @endif
 
-                <!-- ✅ FIXED: Order Cancel Confirmation Modal -->
+                <!-- Trading Positions dari Binance -->
+                <div class="bg-white border border-gray-200 rounded-2xl p-6 mb-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                📊 {{ $isTestnet ? 'Testnet' : 'Live' }} Trading Positions
+                                @if($activePositionsCount > 0)
+                                <span class="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                    {{ $activePositionsCount }} Active
+                                </span>
+                                @endif
+                            </h3>
+                            @if($totalUnrealizedPnl != 0)
+                            <p class="text-sm {{ $totalUnrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600' }} mt-1">
+                                Total Unrealized P&L: 
+                                {{ $totalUnrealizedPnl >= 0 ? '+' : '' }}${{ number_format($totalUnrealizedPnl, 2) }}
+                            </p>
+                            @endif
+                        </div>
+                        
+                        <div class="flex items-center space-x-2">
+                            <button 
+                                wire:click="refreshPositions"
+                                wire:loading.attr="disabled"
+                                class="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                            >
+                                @if($loadingPositions)
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                @else
+                                    <i class="fas fa-sync-alt"></i>
+                                @endif
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    @if($activePositionsCount > 0)
+                        <!-- Positions Table -->
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Symbol
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Side
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Entry/Mark Price
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Quantity
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Unrealized P&L
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Leverage
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    @foreach($binancePositions as $index => $position)
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <div class="font-semibold text-gray-900">{{ $position['symbol'] }}</div>
+                                            <div class="text-xs text-gray-500">{{ $position['position_type'] }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <span class="px-2 py-1 text-xs rounded-full 
+                                                {{ $position['side'] === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                                {{ $position['side'] }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <div class="text-sm">
+                                                <div class="text-gray-600">Entry: ${{ number_format($position['entry_price'], 4) }}</div>
+                                                <div class="text-gray-900">Mark: ${{ number_format($position['mark_price'], 4) }}</div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($position['quantity'], 6) }}
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            @php
+                                                $pnlFormatted = $this->formatPnl($position['unrealized_pnl']);
+                                                $pnlPercentageFormatted = number_format(abs($position['pnl_percentage']), 2) . '%';
+                                            @endphp
+                                            <div class="text-sm font-semibold {{ $pnlFormatted['color'] }}">
+                                                {{ $pnlFormatted['formatted'] }}
+                                            </div>
+                                            <div class="text-xs {{ $pnlFormatted['color'] }}">
+                                                {{ $pnlFormatted['sign'] }}{{ $pnlPercentageFormatted }}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                                {{ $position['leverage'] }}x
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                            <button 
+                                                wire:click="confirmClosePosition({{ $index }})"
+                                                wire:loading.attr="disabled"
+                                                class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                                                {{ $closingPositionId === $position['symbol'] ? 'disabled' : '' }}
+                                            >
+                                                @if($closingPositionId === $position['symbol'])
+                                                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                                                    Closing...
+                                                @else
+                                                    <i class="fas fa-times mr-1"></i>
+                                                    Close
+                                                @endif
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Positions Summary -->
+                        <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-gray-50 rounded-xl p-4">
+                                <div class="text-sm text-gray-600">Total Positions</div>
+                                <div class="text-lg font-bold">{{ $activePositionsCount }}</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-xl p-4">
+                                <div class="text-sm text-gray-600">Margin Type</div>
+                                <div class="text-lg font-bold">
+                                    {{ count(array_unique(array_column($binancePositions, 'margin_type'))) > 1 ? 'Mixed' : ($binancePositions[0]['margin_type'] ?? 'N/A') }}
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 rounded-xl p-4">
+                                <div class="text-sm text-gray-600">Total Exposure</div>
+                                <div class="text-lg font-bold">
+                                    @php
+                                        $totalExposure = 0;
+                                        foreach ($binancePositions as $position) {
+                                            $totalExposure += $position['entry_price'] * $position['quantity'];
+                                        }
+                                    @endphp
+                                    ${{ number_format($totalExposure, 2) }}
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <!-- Empty State -->
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-chart-line text-4xl mb-4 opacity-50"></i>
+                            <p class="font-semibold text-lg">No Active Trading Positions</p>
+                            <p class="text-sm mt-1">
+                                @if($isTestnet)
+                                    When AI executes test trades and orders are filled, positions will appear here
+                                @else
+                                    When AI executes real trades and orders are filled, positions will appear here
+                                @endif
+                            </p>
+                            <div class="mt-4 flex justify-center space-x-3">
+                                <button 
+                                    wire:click="refreshPendingOrders"
+                                    class="inline-flex items-center text-blue-500 hover:text-blue-700 text-sm font-semibold"
+                                >
+                                    <i class="fas fa-sync-alt mr-1"></i> Check Filled Orders
+                                </button>
+                                <button 
+                                    wire:click="refreshPositions"
+                                    class="inline-flex items-center text-green-500 hover:text-green-700 text-sm font-semibold"
+                                >
+                                    <i class="fas fa-redo mr-1"></i> Refresh Positions
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                <!-- Order Cancel Confirmation Modal -->
                 @if($showCancelConfirm && $orderToCancel)
                 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
@@ -714,6 +915,93 @@
                 </div>
                 @endif
 
+                <!-- Position Close Confirmation Modal -->
+                @if($showCloseConfirm && $positionToClose)
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900">Close Position</h3>
+                                <button 
+                                    wire:click="closeCloseConfirm"
+                                    class="text-gray-400 hover:text-gray-600"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <p class="text-gray-600 mb-3">Are you sure you want to close this position?</p>
+                                
+                                <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Symbol:</span>
+                                            <span class="font-semibold">{{ $positionToClose['symbol'] }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Side:</span>
+                                            <span class="font-semibold {{ $positionToClose['side'] === 'BUY' ? 'text-green-600' : 'text-red-600' }}">
+                                                {{ $positionToClose['side'] }} ({{ $positionToClose['position_type'] }})
+                                            </span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Quantity:</span>
+                                            <span class="font-semibold">{{ number_format($positionToClose['quantity'], 6) }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Entry Price:</span>
+                                            <span class="font-semibold">${{ number_format($positionToClose['entry_price'], 4) }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Current P&L:</span>
+                                            @php
+                                                $pnlFormatted = $this->formatPnl($positionToClose['unrealized_pnl']);
+                                            @endphp
+                                            <span class="font-semibold {{ $pnlFormatted['color'] }}">
+                                                {{ $pnlFormatted['formatted'] }} ({{ number_format(abs($positionToClose['pnl_percentage']), 2) }}%)
+                                            </span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Leverage:</span>
+                                            <span class="font-semibold">{{ $positionToClose['leverage'] }}x</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                                    <p class="text-sm text-blue-700">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        This will place a MARKET order with <strong>reduceOnly=true</strong> to close the position.
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3">
+                                <button 
+                                    wire:click="closeCloseConfirm"
+                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    wire:click="closePositionConfirmed"
+                                    wire:loading.attr="disabled"
+                                    class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                                >
+                                    @if($closingPositionId === $positionToClose['symbol'])
+                                        <i class="fas fa-spinner fa-spin mr-1"></i>
+                                        Closing...
+                                    @else
+                                        Yes, Close Position
+                                    @endif
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 <!-- Real Trading Stats Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <!-- Real Balance Card -->
@@ -762,43 +1050,19 @@
                         </div>
                     </div>
 
-                    <!-- Status Card -->
+                    <!-- Unrealized PnL Card -->
                     <div class="bg-white border border-orange-200 rounded-2xl p-4 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
-                                <div class="text-lg font-bold {{ $realTradingEnabled ? 'text-green-600' : 'text-gray-600' }}">
-                                    {{ $realTradingEnabled ? 'ACTIVE' : 'PAUSED' }}
+                                <div class="text-lg font-bold {{ $totalUnrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600' }}">
+                                    {{ $totalUnrealizedPnl >= 0 ? '+' : '' }}${{ number_format($totalUnrealizedPnl, 2) }}
                                 </div>
-                                <div class="text-xs font-semibold text-gray-600">Trading Status</div>
+                                <div class="text-xs font-semibold text-gray-600">Unrealized P&L</div>
                             </div>
                             <div class="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center">
-                                <i class="fas fa-power-off text-white text-sm"></i>
+                                <i class="fas fa-chart-line text-white text-sm"></i>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Real Positions Table -->
-                <div class="bg-white border border-gray-200 rounded-2xl p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
-                        {{ $isTestnet ? 'Testnet' : 'Live' }} Trading Positions
-                    </h3>
-                    <div class="text-center py-8 text-gray-500">
-                        <i class="fas fa-chart-line text-4xl mb-4 opacity-50"></i>
-                        <p>
-                            @if($isTestnet)
-                                Testnet trading positions will appear here when AI executes test trades
-                            @else
-                                Real trading positions will appear here when AI executes live trades
-                            @endif
-                        </p>
-                        <p class="text-sm mt-2">
-                            @if($realTradingEnabled && $futuresBalance >= $minBalanceRequired)
-                                ✅ Ready for {{ $isTestnet ? 'test' : 'real' }} trading - AI will execute trades
-                            @else
-                                ⚠️ Make sure trading is enabled and you have sufficient balance
-                            @endif
-                        </p>
                     </div>
                 </div>
 
@@ -807,23 +1071,24 @@
 
     </div>
 
-    <!-- ✅ Fixed JavaScript -->
+    <!-- JavaScript untuk auto-refresh dan events -->
     <script>
     document.addEventListener('livewire:initialized', () => {
         @this.on('binance-connected', () => {
             console.log('🔧 Binance connected event received');
             
-            // Show success message
-            Livewire.dispatch('show-toast', {
-                type: 'success',
-                message: 'Binance connected successfully!'
-            });
-            
-            // Force reload component setelah 1 detik
+            // Show success toast
             setTimeout(() => {
                 @this.refreshData();
             }, 1000);
         });
+        
+        // Auto-refresh positions setiap 30 detik
+        setInterval(() => {
+            if (@this.binanceConnected) {
+                @this.loadBinancePositions();
+            }
+        }, 30000);
     });
     </script>
 </div>
