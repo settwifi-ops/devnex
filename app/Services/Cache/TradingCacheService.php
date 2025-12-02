@@ -769,15 +769,20 @@ class TradingCacheService
     {
         try {
             $response = $this->redis->ping();
-            // Handle berbagai tipe response
-            if (is_bool($response)) {
-                return $response;
-            } elseif (is_string($response)) {
-                return strtoupper($response) === 'PONG';
-            } elseif (is_numeric($response)) {
-                return $response == 1;
+            
+            // Handle Predis Response\Status object
+            if ($response instanceof \Predis\Response\Status) {
+                return strtoupper((string)$response) === 'PONG';
             }
-            return false;
+            
+            // Handle string response
+            if (is_string($response)) {
+                return strtoupper($response) === 'PONG';
+            }
+            
+            // Handle boolean/numeric
+            return (bool)$response;
+            
         } catch (\Exception $e) {
             Log::error("Redis ping failed: " . $e->getMessage());
             return false;
