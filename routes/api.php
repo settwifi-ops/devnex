@@ -212,3 +212,28 @@ Route::get('/test-pusher-private', function() {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 });
+
+// routes/api.php
+Route::prefix('trading')->middleware(['api', 'auth:sanctum'])->group(function () {
+    // Test endpoints
+    Route::post('/test/single', [TradingTestController::class, 'testSingleUser']);
+    Route::post('/test/batch', [TradingTestController::class, 'testBatchTrade']);
+    Route::get('/stats', [TradingTestController::class, 'getStats']);
+    Route::post('/refresh', [TradingTestController::class, 'forceRefresh']);
+    Route::post('/check-orders', [TradingTestController::class, 'checkOrders']);
+    
+    // Production endpoints
+    Route::post('/execute', function (Request $request) {
+        // Endpoint untuk trigger trading dari AI decisions
+        $decision = AiDecision::find($request->decision_id);
+        
+        if (!$decision) {
+            return response()->json(['error' => 'Decision not found'], 404);
+        }
+        
+        $service = app(RealTradingExecutionService::class);
+        $result = $service->executeRealTrade($decision);
+        
+        return response()->json($result);
+    });
+});

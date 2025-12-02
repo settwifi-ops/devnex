@@ -9,6 +9,8 @@ use App\Services\BinanceAccountService;
 use App\Services\RealTradingExecutionService;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Services\RealTradingExecutionService;
+use App\Services\Cache\TradingCacheService;
 
 class RealTradingPage extends Component
 {
@@ -58,13 +60,16 @@ class RealTradingPage extends Component
 
     // Tabs
     public $activeTab = 'active';
-
+    private $tradingService;
+    private $tradingCache;
     // Real trading execution service
     protected $realTradingService;
 
     public function boot()
     {
         $this->realTradingService = app(RealTradingExecutionService::class);
+        $this->tradingService = app(RealTradingExecutionService::class);
+        $this->tradingCache = app(TradingCacheService::class)
     }
 
     public function mount()
@@ -152,7 +157,51 @@ class RealTradingPage extends Component
             Log::warning("Failed to load user accounts: " . $e->getMessage());
         }
     }
-
+    /**
+     * Optimized method untuk load positions dengan cache
+     */
+    public function getPositionsProperty()
+    {
+        // Coba dari cache dulu
+        $cachedPositions = $this->tradingCache->getPositions($this->user->id);
+        
+        if (!empty($cachedPositions)) {
+            return $cachedPositions;
+        }
+        
+        // Jika cache kosong, trigger background refresh
+        RefreshUserDataJob::dispatch($this->user->id);
+        
+        // Return empty array atau data dari database
+        return $this->getFallbackPositions();
+    }
+    
+    /**
+     * Optimized refresh
+     */
+    public function refreshData()
+    {
+        $this->loading = true;
+        
+        // Gunakan service untuk force refresh
+        $result = $this->tradingService->forceRefreshUserData($this->user->id);
+        
+        if ($result['success']) {
+            session()->flash('message', 'Data refresh initiated. It may take a few seconds.');
+        } else {
+            session()->flash('error', 'Refresh failed: ' . $result['message']);
+        }
+        
+        $this->loading = false;
+    }
+    
+    /**
+     * Get trading statistics
+     */
+    public function getTradingStats()
+    {
+        return $this->tradingService->getTradingStatistics($this->user->id);
+    }
     /**
      * Load pending orders untuk user
      */
