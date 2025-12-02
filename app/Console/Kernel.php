@@ -14,7 +14,20 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // ==================== 1. REAL-TIME JOBS ====================
+            // Check expired orders setiap 5 menit
+        $schedule->command('trading:monitor --check-expired')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
         
+        // Add stop loss ke filled orders setiap 10 menit
+        $schedule->command('trading:monitor --add-sl')
+            ->everyTenMinutes()
+            ->withoutOverlapping();
+        
+        // Full monitoring setiap jam
+        $schedule->command('trading:monitor')
+            ->hourly()
+            ->withoutOverlapping();
         // SL/TP Monitoring - setiap 30 detik
         $schedule->command('trading:monitor-sltp')
                  ->everyMinute()
@@ -213,6 +226,7 @@ class Kernel extends ConsoleKernel
         Commands\AdaptiveWeeklyOptimizationCommand::class,
         Commands\AdaptiveWeeklyDeepLearningCommand::class,
         Commands\SchedulerHealthCheckCommand::class,
+        Commands\MonitorRealTrading::class,
     ];
 
     /**

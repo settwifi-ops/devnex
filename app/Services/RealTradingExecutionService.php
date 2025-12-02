@@ -8,10 +8,18 @@ use App\Models\TradeHistory;
 use App\Models\PendingOrder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class RealTradingExecutionService
 {
     private $binanceAccountService;
+
+    // Konfigurasi Risk Management
+    private $stopLossPercentage = 2.0; // 2% stop loss
+    private $takeProfitPercentage = 4.0; // 4% take profit
+    private $riskPerTrade = 0.02; // 2% risk per trade
+    private $orderExpiryMinutes = 15; // 15 menit expiry
+    private $leverage = 5; // 5x leverage
 
     public function __construct(BinanceAccountService $binanceAccountService)
     {
@@ -77,7 +85,7 @@ class RealTradingExecutionService
     }
 
     /**
-     * ✅ METHOD BARU: Execute real trade untuk single user
+     * ✅ Execute real trade untuk single user dengan STOP LOSS & TAKE PROFIT
      */
     public function executeForUser(User $user, AiDecision $decision)
     {
@@ -100,7 +108,7 @@ class RealTradingExecutionService
                 $portfolio = $user->portfolio;
                 $positionType = $this->getPositionTypeFromAction($decision->action);
                 
-                return $this->executeRealBuy($user, $portfolio, $decision, $positionType);
+                return $this->executeRealTradeWithSLTP($user, $portfolio, $decision, $positionType);
             });
 
         } catch (\Exception $e) {
@@ -110,7 +118,194 @@ class RealTradingExecutionService
     }
 
     /**
-     * ✅ METHOD BARU: Check pending orders yang expired
+     * ✅ ENHANCED: Execute real trade dengan STOP LOSS & TAKE PROFIT
+     */
+    private function executeRealTradeWithSLTP(User $user, $portfolio, AiDecision $decision, $positionType)
+    {
+        try {
+            $binance = $this->binanceAccountService->getBinanceInstance($user->id);
+            
+            // Get balance
+            $balance = $this->binanceAccountService->getFuturesBalanceOnly($user->id);
+            $availableBalance = $balance['available'];
+            
+            // Calculate position size berdasarkan risk management
+            $riskAmount = $availableBalance * $this->riskPerTrade;
+            $riskAmount = max(11, min($riskAmount, 50));
+            
+            if ($riskAmount > $availableBalance) {
+                throw new \Exception("Insufficient balance. Required: \${$riskAmount}, Available: \${$availableBalance}");
+            }
+
+            // Entry price dari decision
+            $limitPrice = $decision->price;
+
+            // Calculate quantity
+            $quantity = $riskAmount / $limitPrice;
+            $quantity = $this->calculatePreciseQuantity($binance, $decision->symbol, $quantity);
+
+            if ($quantity <= 0) {
+                throw new \Exception("Invalid quantity: {$quantity}");
+            }
+
+            // Set leverage
+            $this->setLeverage($binance, $decision->symbol, $this->leverage);
+
+            // Hitung Stop Loss & Take Profit
+            $stopLossPrice = $this->calculateStopLossPrice($limitPrice, $positionType);
+            $takeProfitPrice = $this->calculateTakeProfitPrice($limitPrice, $positionType);
+
+            Log::info("🎯 PLACING ENHANCED REAL ORDER", [
+                'user_id' => $user->id,
+                'symbol' => $decision->symbol,
+                'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
+                'quantity' => $quantity,
+                'limit_price' => $limitPrice,
+                'stop_loss' => $stopLossPrice,
+                'take_profit' => $takeProfitPrice,
+                'amount' => $riskAmount,
+                'risk_reward' => '1:2',
+                'expires' => "{$this->orderExpiryMinutes} minutes"
+            ]);
+
+            // ==============================================
+            // 1. PLACE MAIN LIMIT ORDER
+            // ==============================================
+            $order = $binance->futuresOrder(
+                $positionType === 'LONG' ? 'BUY' : 'SELL',
+                $decision->symbol,
+                $quantity,
+                $limitPrice,
+                'LIMIT',
+                [
+                    'timeInForce' => 'GTC',
+                    'leverage' => $this->leverage
+                ]
+            );
+
+            if (!isset($order['orderId'])) {
+                throw new \Exception("Limit order placement failed: " . json_encode($order));
+            }
+
+            $mainOrderId = $order['orderId'];
+            
+            // ==============================================
+            // 2. PLACE STOP LOSS ORDER (STOP_MARKET)
+            // ==============================================
+            $stopLossOrderId = null;
+            try {
+                $stopLossSide = $positionType === 'LONG' ? 'SELL' : 'BUY';
+                $stopLossOrder = $binance->futuresOrder(
+                    $stopLossSide,
+                    $decision->symbol,
+                    $quantity,
+                    0, // Price 0 untuk MARKET
+                    'STOP_MARKET',
+                    [
+                        'stopPrice' => $stopLossPrice,
+                        'closePosition' => 'true',
+                        'reduceOnly' => 'true'
+                    ]
+                );
+                
+                $stopLossOrderId = $stopLossOrder['orderId'] ?? null;
+                Log::info("🛑 STOP LOSS ORDER PLACED", ['order_id' => $stopLossOrderId]);
+            } catch (\Exception $e) {
+                Log::warning("⚠️ Stop loss order failed (non-critical): " . $e->getMessage());
+            }
+
+            // ==============================================
+            // 3. PLACE TAKE PROFIT ORDER (LIMIT)
+            // ==============================================
+            $takeProfitOrderId = null;
+            try {
+                $takeProfitSide = $positionType === 'LONG' ? 'SELL' : 'BUY';
+                $takeProfitOrder = $binance->futuresOrder(
+                    $takeProfitSide,
+                    $decision->symbol,
+                    $quantity,
+                    $takeProfitPrice,
+                    'LIMIT',
+                    [
+                        'timeInForce' => 'GTC',
+                        'reduceOnly' => 'true'
+                    ]
+                );
+                
+                $takeProfitOrderId = $takeProfitOrder['orderId'] ?? null;
+                Log::info("🎯 TAKE PROFIT ORDER PLACED", ['order_id' => $takeProfitOrderId]);
+            } catch (\Exception $e) {
+                Log::warning("⚠️ Take profit order failed (non-critical): " . $e->getMessage());
+            }
+
+            // ==============================================
+            // 4. SAVE PENDING ORDER DENGAN SL/TP INFO
+            // ==============================================
+            PendingOrder::create([
+                'user_id' => $user->id,
+                'ai_decision_id' => $decision->id,
+                'symbol' => $decision->symbol,
+                'binance_order_id' => $mainOrderId,
+                'stop_loss_order_id' => $stopLossOrderId,
+                'take_profit_order_id' => $takeProfitOrderId,
+                'limit_price' => $limitPrice,
+                'stop_loss_price' => $stopLossPrice,
+                'take_profit_price' => $takeProfitPrice,
+                'quantity' => $quantity,
+                'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
+                'position_type' => $positionType,
+                'expires_at' => now()->addMinutes($this->orderExpiryMinutes),
+                'status' => 'PENDING',
+                'order_status' => 'NEW',
+                'notes' => "Limit order with SL: \${$stopLossPrice}, TP: \${$takeProfitPrice}"
+            ]);
+
+            Log::info("✅ ENHANCED ORDER PLACED", [
+                'user_id' => $user->id,
+                'main_order' => $mainOrderId,
+                'stop_loss' => $stopLossOrderId ?? 'None',
+                'take_profit' => $takeProfitOrderId ?? 'None',
+                'expires_at' => now()->addMinutes($this->orderExpiryMinutes)->format('H:i:s')
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("ENHANCED REAL TRADE execution failed for user {$user->id}: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * ✅ Calculate Stop Loss Price
+     */
+    private function calculateStopLossPrice($entryPrice, $positionType)
+    {
+        if ($positionType === 'LONG') {
+            // Untuk LONG: stop loss di bawah entry
+            return $entryPrice * (1 - ($this->stopLossPercentage / 100));
+        } else {
+            // Untuk SHORT: stop loss di atas entry  
+            return $entryPrice * (1 + ($this->stopLossPercentage / 100));
+        }
+    }
+
+    /**
+     * ✅ Calculate Take Profit Price
+     */
+    private function calculateTakeProfitPrice($entryPrice, $positionType)
+    {
+        if ($positionType === 'LONG') {
+            // Untuk LONG: take profit di atas entry
+            return $entryPrice * (1 + ($this->takeProfitPercentage / 100));
+        } else {
+            // Untuk SHORT: take profit di bawah entry
+            return $entryPrice * (1 - ($this->takeProfitPercentage / 100));
+        }
+    }
+
+    /**
+     * ✅ ENHANCED: Check pending orders yang expired & cancel SL/TP juga
      */
     public function checkPendingOrders()
     {
@@ -121,11 +316,15 @@ class RealTradingExecutionService
 
             Log::info("🕒 Checking expired orders: " . $expiredOrders->count());
 
+            $cancelledCount = 0;
             foreach ($expiredOrders as $order) {
-                $this->cancelExpiredOrder($order);
+                if ($this->cancelExpiredOrderWithSLTP($order)) {
+                    $cancelledCount++;
+                }
             }
 
-            return $expiredOrders->count();
+            Log::info("✅ Cancelled {$cancelledCount} expired orders with their SL/TP");
+            return $cancelledCount;
             
         } catch (\Exception $e) {
             Log::error("❌ Check pending orders failed: " . $e->getMessage());
@@ -134,31 +333,63 @@ class RealTradingExecutionService
     }
 
     /**
-     * ✅ METHOD BARU: Cancel expired order
+     * ✅ ENHANCED: Cancel expired order beserta SL/TP orders
      */
-    private function cancelExpiredOrder(PendingOrder $pendingOrder)
+    private function cancelExpiredOrderWithSLTP(PendingOrder $pendingOrder)
     {
         try {
             $binance = $this->binanceAccountService->getBinanceInstance($pendingOrder->user_id);
             
-            // Cancel order di Binance
-            $result = $binance->futuresCancel($pendingOrder->symbol, $pendingOrder->binance_order_id);
+            $cancelledOrders = [];
             
+            // 1. Cancel main order
+            try {
+                $result = $binance->futuresCancel($pendingOrder->symbol, $pendingOrder->binance_order_id);
+                $cancelledOrders[] = 'Main order';
+                Log::info("🗑️ Main order cancelled: " . $pendingOrder->binance_order_id);
+            } catch (\Exception $e) {
+                Log::warning("Main order cancel failed: " . $e->getMessage());
+            }
+
+            // 2. Cancel stop loss order jika ada
+            if ($pendingOrder->stop_loss_order_id) {
+                try {
+                    $binance->futuresCancel($pendingOrder->symbol, $pendingOrder->stop_loss_order_id);
+                    $cancelledOrders[] = 'Stop loss';
+                    Log::info("🗑️ Stop loss order cancelled: " . $pendingOrder->stop_loss_order_id);
+                } catch (\Exception $e) {
+                    Log::warning("Stop loss cancel failed: " . $e->getMessage());
+                }
+            }
+
+            // 3. Cancel take profit order jika ada
+            if ($pendingOrder->take_profit_order_id) {
+                try {
+                    $binance->futuresCancel($pendingOrder->symbol, $pendingOrder->take_profit_order_id);
+                    $cancelledOrders[] = 'Take profit';
+                    Log::info("🗑️ Take profit order cancelled: " . $pendingOrder->take_profit_order_id);
+                } catch (\Exception $e) {
+                    Log::warning("Take profit cancel failed: " . $e->getMessage());
+                }
+            }
+
             // Update status di database
             $pendingOrder->update([
                 'status' => 'EXPIRED',
-                'notes' => 'Automatically cancelled after 15 minutes'
+                'notes' => 'Automatically cancelled after ' . $this->orderExpiryMinutes . ' minutes. ' .
+                          'Cancelled: ' . implode(', ', $cancelledOrders)
             ]);
 
-            Log::info("🕒 ORDER EXPIRED: " . $pendingOrder->symbol, [
+            Log::info("🕒 ORDER EXPIRED WITH SL/TP: " . $pendingOrder->symbol, [
                 'user_id' => $pendingOrder->user_id,
-                'order_id' => $pendingOrder->binance_order_id
+                'main_order' => $pendingOrder->binance_order_id,
+                'cancelled_orders' => $cancelledOrders
             ]);
 
             return true;
 
         } catch (\Exception $e) {
-            Log::error("❌ Cancel expired order failed: " . $e->getMessage());
+            Log::error("❌ Cancel expired order with SL/TP failed: " . $e->getMessage());
             
             // Tetap mark as expired meski cancel gagal
             $pendingOrder->update([
@@ -171,106 +402,153 @@ class RealTradingExecutionService
     }
 
     /**
-     * Enhanced REAL BUY execution - MODIFIED untuk LIMIT ORDER
+     * ✅ METHOD BARU: Add stop loss to filled orders that don't have one
      */
-    private function executeRealBuy(User $user, $portfolio, AiDecision $decision, $positionType)
+    public function addStopLossToFilledOrders($userId = null)
     {
         try {
-            $binance = $this->binanceAccountService->getBinanceInstance($user->id);
+            $query = PendingOrder::where('status', 'FILLED')
+                ->whereNull('stop_loss_order_id');
             
-            // ✅ FIX: Gunakan method yang benar
-            $balance = $this->binanceAccountService->getFuturesBalanceOnly($user->id);
-            $availableBalance = $balance['available']; // ✅ PAKAI INI
+            if ($userId) {
+                $query->where('user_id', $userId);
+            }
             
-            // ✅ Calculate safe position size (5% dari available balance)
-            $riskAmount = $availableBalance * 0.05;
-            $riskAmount = max(11, min($riskAmount, 50));
+            $orders = $query->get();
             
-            if ($riskAmount > $availableBalance) {
-                throw new \Exception("Insufficient balance. Required: \${$riskAmount}, Available: \${$availableBalance}");
+            Log::info("🔧 Adding stop loss to {$orders->count()} filled orders");
+            
+            $addedCount = 0;
+            
+            foreach ($orders as $order) {
+                try {
+                    if ($this->addStopLossToFilledOrder($order)) {
+                        $addedCount++;
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Failed to add stop loss to order {$order->id}: " . $e->getMessage());
+                }
             }
-
-            // ✅ PAKAI HARGA DECISION, bukan current price
-            $limitPrice = $decision->price;
-
-            // ✅ Calculate precise quantity
-            $quantity = $riskAmount / $limitPrice;
-            $quantity = $this->calculatePreciseQuantity($binance, $decision->symbol, $quantity);
-
-            if ($quantity <= 0) {
-                throw new \Exception("Invalid quantity: {$quantity}");
-            }
-
-            // ✅ Skip leverage untuk testing
-            Log::info("⚠️ Skipping leverage setting for testing");
-
-            Log::info("🎯 PLACING REAL LIMIT ORDER", [
-                'user_id' => $user->id,
-                'symbol' => $decision->symbol,
-                'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
-                'quantity' => $quantity,
-                'limit_price' => $limitPrice,
-                'amount' => $riskAmount,
-                'expires' => '15 minutes'
-            ]);
-
-            // ✅ FIXED: Parameter yang benar untuk futuresOrder()
-            $order = $binance->futuresOrder(
-                $positionType === 'LONG' ? 'BUY' : 'SELL', // Side: BUY atau SELL (string)
-                $decision->symbol,                         // Symbol
-                $quantity,                                 // Quantity
-                $limitPrice,                               // Price
-                'LIMIT',                                   // Type (string)
-                [                                          // Parameters (array)
-                    'timeInForce' => 'GTC',
-                    'leverage' => 5
-                ]
-            );
-
-            // ✅ Validate order execution
-            if (!isset($order['orderId'])) {
-                throw new \Exception("Limit order placement failed: " . json_encode($order));
-            }
-
-            // ✅ SIMPAN SEBAGAI PENDING ORDER
-            PendingOrder::create([
-                'user_id' => $user->id,
-                'ai_decision_id' => $decision->id,
-                'symbol' => $decision->symbol,
-                'binance_order_id' => $order['orderId'],
-                'limit_price' => $limitPrice,
-                'quantity' => $quantity,
-                'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
-                'position_type' => $positionType,
-                'expires_at' => now()->addMinutes(15),
-                'status' => 'PENDING',
-                'notes' => 'Limit order - 15 minutes expiry'
-            ]);
-
-            Log::info("✅ LIMIT ORDER PLACED - Fill or no fill OK", [
-                'user_id' => $user->id,
-                'order_id' => $order['orderId'],
-                'symbol' => $decision->symbol,
-                'price' => $limitPrice,
-                'quantity' => $quantity,
-                'order_response' => $order
-            ]);
-
-            return true;
-
+            
+            Log::info("✅ Added stop loss to {$addedCount} filled orders");
+            return $addedCount;
+            
         } catch (\Exception $e) {
-            Log::error("REAL BUY execution failed for user {$user->id}: " . $e->getMessage());
-            throw $e;
+            Log::error("❌ Add stop loss to filled orders failed: " . $e->getMessage());
+            return 0;
         }
     }
 
     /**
-     * Get current price dari Binance
+     * ✅ METHOD BARU: Add stop loss to single filled order
      */
+    private function addStopLossToFilledOrder(PendingOrder $order)
+    {
+        try {
+            $binance = $this->binanceAccountService->getBinanceInstance($order->user_id);
+            
+            // Hitung stop loss price
+            $stopLossPrice = $this->calculateStopLossPrice(
+                $order->limit_price ?? $order->executed_price, 
+                $order->position_type
+            );
+            
+            $stopLossSide = $order->side === 'BUY' ? 'SELL' : 'BUY';
+            
+            // Place stop loss order
+            $stopLossOrder = $binance->futuresOrder(
+                $stopLossSide,
+                $order->symbol,
+                $order->quantity,
+                0, // Price 0 untuk MARKET
+                'STOP_MARKET',
+                [
+                    'stopPrice' => $stopLossPrice,
+                    'closePosition' => 'true',
+                    'reduceOnly' => 'true'
+                ]
+            );
+            
+            if (!isset($stopLossOrder['orderId'])) {
+                throw new \Exception("Stop loss order failed: " . json_encode($stopLossOrder));
+            }
+            
+            // Update pending order dengan stop loss info
+            $order->update([
+                'stop_loss_order_id' => $stopLossOrder['orderId'],
+                'stop_loss_price' => $stopLossPrice,
+                'notes' => $order->notes . " | Stop loss added post-fill: " . $stopLossOrder['orderId']
+            ]);
+            
+            Log::info("✅ STOP LOSS ADDED TO FILLED ORDER", [
+                'order_id' => $order->id,
+                'stop_loss_id' => $stopLossOrder['orderId'],
+                'stop_loss_price' => $stopLossPrice
+            ]);
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            Log::error("❌ Failed to add stop loss to filled order {$order->id}: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * ✅ METHOD BARU: Get active stop loss orders for monitoring
+     */
+    public function getActiveStopLossOrders($userId = null)
+    {
+        try {
+            $query = PendingOrder::whereNotNull('stop_loss_order_id')
+                ->where('status', 'FILLED');
+            
+            if ($userId) {
+                $query->where('user_id', $userId);
+            }
+            
+            $orders = $query->get();
+            
+            $activeSL = [];
+            foreach ($orders as $order) {
+                try {
+                    $binance = $this->binanceAccountService->getBinanceInstance($order->user_id);
+                    
+                    // Cek status stop loss order di Binance
+                    $slStatus = $binance->futuresGetOrder([
+                        'symbol' => $order->symbol,
+                        'orderId' => $order->stop_loss_order_id
+                    ]);
+                    
+                    $activeSL[] = [
+                        'order_id' => $order->id,
+                        'symbol' => $order->symbol,
+                        'stop_loss_id' => $order->stop_loss_order_id,
+                        'stop_loss_price' => $order->stop_loss_price,
+                        'status' => $slStatus['status'] ?? 'UNKNOWN',
+                        'triggered' => ($slStatus['status'] ?? '') === 'FILLED'
+                    ];
+                    
+                } catch (\Exception $e) {
+                    Log::warning("Failed to check stop loss status: " . $e->getMessage());
+                }
+            }
+            
+            return $activeSL;
+            
+        } catch (\Exception $e) {
+            Log::error("❌ Get active stop loss orders failed: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // ==============================================
+    // HELPER METHODS (tetap sama seperti sebelumnya)
+    // ==============================================
+    
     private function getCurrentPrice($binance, $symbol)
     {
         try {
-            // ✅ Gunakan method price() dari jaggedsoft library
             return $binance->price($symbol);
         } catch (\Exception $e) {
             Log::error("Price fetch failed for {$symbol}: " . $e->getMessage());
@@ -278,13 +556,9 @@ class RealTradingExecutionService
         }
     }
 
-    /**
-     * Calculate precise quantity berdasarkan symbol rules
-     */
     private function calculatePreciseQuantity($binance, $symbol, $quantity)
     {
         try {
-            // ✅ Get exchange info untuk futures
             $info = $binance->futuresExchangeInfo();
             $symbolInfo = null;
             
@@ -299,7 +573,6 @@ class RealTradingExecutionService
                 throw new \Exception("Symbol info not found for {$symbol}");
             }
 
-            // Get LOT_SIZE filter
             $lotSizeFilter = null;
             foreach ($symbolInfo['filters'] as $filter) {
                 if ($filter['filterType'] === 'LOT_SIZE') {
@@ -313,12 +586,10 @@ class RealTradingExecutionService
                 $minQty = floatval($lotSizeFilter['minQty']);
                 $maxQty = floatval($lotSizeFilter['maxQty']);
                 
-                // Adjust quantity to step size
                 $precision = strlen(substr(strrchr($stepSize, '.'), 1)) - 1;
                 $adjustedQty = floor($quantity / $stepSize) * $stepSize;
                 $adjustedQty = round($adjustedQty, $precision);
                 
-                // Validate min/max
                 if ($adjustedQty < $minQty) {
                     throw new \Exception("Quantity too small. Min: {$minQty}, Calculated: {$adjustedQty}");
                 }
@@ -326,66 +597,26 @@ class RealTradingExecutionService
                     throw new \Exception("Quantity too large. Max: {$maxQty}, Calculated: {$adjustedQty}");
                 }
                 
-                Log::info("🔢 Quantity adjusted", [
-                    'original' => $quantity,
-                    'adjusted' => $adjustedQty,
-                    'step_size' => $stepSize
-                ]);
-                
                 return $adjustedQty;
             }
 
-            return round($quantity, 6); // Default precision
-
+            return round($quantity, 6);
         } catch (\Exception $e) {
             Log::warning("Quantity precision adjustment failed: " . $e->getMessage());
-            return round($quantity, 6); // Fallback
+            return round($quantity, 6);
         }
     }
 
-    /**
-     * Set leverage untuk symbol
-     */
     private function setLeverage($binance, $symbol, $leverage)
     {
         try {
-            // ✅ Method yang tersedia di jaggedsoft library
             if (method_exists($binance, 'futures_change_leverage')) {
                 $result = $binance->futures_change_leverage($symbol, $leverage);
-            } 
-            // Coba method lain yang mungkin ada
-            elseif (method_exists($binance, 'change_leverage')) {
+            } elseif (method_exists($binance, 'change_leverage')) {
                 $result = $binance->change_leverage($symbol, $leverage);
-            }
-            // Jika tidak ada, gunakan manual API call
-            else {
-                Log::info("⚙️ Using manual leverage API call for {$symbol}");
-                
-                // Manual API call ke Binance
-                $timestamp = round(microtime(true) * 1000);
-                $params = [
-                    'symbol' => $symbol,
-                    'leverage' => $leverage,
-                    'timestamp' => $timestamp
-                ];
-                
-                $query = http_build_query($params);
-                $signature = hash_hmac('sha256', $query, $binance->secret);
-                $params['signature'] = $signature;
-                
-                // Gunakan base URL yang benar
-                $baseUrl = $binance->testnet 
-                    ? 'https://testnet.binancefuture.com' 
-                    : 'https://fapi.binance.com';
-                    
-                $response = $this->client->post("{$baseUrl}/fapi/v1/leverage", [
-                    'headers' => [
-                        'X-MBX-APIKEY' => $binance->api_key,
-                    ],
-                    'form_params' => $params
-                ]);
-                
-                $result = json_decode($response->getBody(), true);
+            } else {
+                Log::info("⚙️ Leverage setting skipped - using default");
+                return null;
             }
             
             Log::info("🎯 Leverage set to {$leverage}x for {$symbol}", (array)$result);
@@ -393,108 +624,22 @@ class RealTradingExecutionService
             
         } catch (\Exception $e) {
             Log::warning("⚠️ Leverage setting failed (continuing anyway): " . $e->getMessage());
-            // Continue without leverage change - ini opsional
             return null;
         }
     }
 
-    /**
-     * Save real position ke database
-     */
-    private function saveRealPosition($user, $portfolio, $decision, $positionType, $order, $quantity, $price, $amount)
-    {
-        try {
-            $position = UserPosition::create([
-                'user_id' => $user->id,
-                'portfolio_id' => $portfolio->id,
-                'ai_decision_id' => $decision->id,
-                'symbol' => $decision->symbol,
-                'position_type' => $positionType,
-                'qty' => $quantity,
-                'avg_price' => $price,
-                'current_price' => $price,
-                'investment' => $amount,
-                'floating_pnl' => 0,
-                'pnl_percentage' => 0,
-                'stop_loss' => $this->calculateStopLoss($price, $positionType),
-                'take_profit' => $this->calculateTakeProfit($price, $positionType),
-                'status' => 'OPEN',
-                'is_real_trade' => true,
-                'binance_order_id' => $order['orderId'],
-                'opened_at' => now(),
-            ]);
-
-            // Create trade history
-            TradeHistory::create([
-                'user_id' => $user->id,
-                'ai_decision_id' => $decision->id,
-                'position_id' => $position->id,
-                'symbol' => $decision->symbol,
-                'action' => 'BUY',
-                'position_type' => $positionType,
-                'qty' => $quantity,
-                'price' => $price,
-                'amount' => $amount,
-                'is_real_trade' => true,
-                'binance_order_id' => $order['orderId'],
-                'notes' => "REAL TRADE - {$positionType} - Leverage: 5x - Amount: \${$amount}",
-            ]);
-
-            // Update portfolio
-            $portfolio->calculateRealEquity();
-
-            Log::info("✅ REAL POSITION SAVED - User: {$user->id}, Symbol: {$decision->symbol}, Order: {$order['orderId']}");
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error("Save real position failed: " . $e->getMessage());
-            throw new \Exception("Position saving failed: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Calculate stop loss price
-     */
-    private function calculateStopLoss($entryPrice, $positionType)
-    {
-        $slPercent = 0.03; // 3% stop loss
-        return $positionType === 'LONG' 
-            ? $entryPrice * (1 - $slPercent)
-            : $entryPrice * (1 + $slPercent);
-    }
-
-    /**
-     * Calculate take profit price
-     */
-    private function calculateTakeProfit($entryPrice, $positionType)
-    {
-        $tpPercent = 0.06; // 6% take profit
-        return $positionType === 'LONG' 
-            ? $entryPrice * (1 + $tpPercent)
-            : $entryPrice * (1 - $tpPercent);
-    }
-
-    /**
-     * Convert AI action to position type
-     */
     private function getPositionTypeFromAction($action)
     {
         return $action === 'BUY' ? 'LONG' : 'SHORT';
     }
 
-    /**
-     * Notifications (bisa integrate dengan existing notification system)
-     */
     private function notifyRealTradeExecution($userId, $symbol, $action, $message)
     {
         Log::info("📢 REAL TRADE NOTIFICATION - User: {$userId}, {$message}");
-        // TODO: Integrate dengan notification system yang ada
     }
 
     private function notifyRealTradeError($userId, $symbol, $action, $error)
     {
         Log::error("❌ REAL TRADE ERROR - User: {$userId}, {$error}");
-        // TODO: Integrate dengan notification system yang ada
     }
 }
