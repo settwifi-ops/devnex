@@ -10,6 +10,7 @@ use App\Services\RealTradingExecutionService;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Services\Cache\TradingCacheService;
+use App\Jobs\RefreshUserDataJob;
 
 class RealTradingPage extends Component
 {
@@ -32,6 +33,7 @@ class RealTradingPage extends Component
     public $connecting = false;
     public $refreshing = false;
     public $toggling = false;
+    public $loading = false; 
     
     // Account management
     public $showAccountManagement = false;
@@ -162,44 +164,32 @@ class RealTradingPage extends Component
     public function getPositionsProperty()
     {
         // Coba dari cache dulu
-        $cachedPositions = $this->tradingCache->getPositions($this->user->id);
-        
-        if (!empty($cachedPositions)) {
-            return $cachedPositions;
+        if ($this->tradingCache && method_exists($this->tradingCache, 'getPositions')) {
+            $cachedPositions = $this->tradingCache->getPositions($this->user->id);
+            
+            if (!empty($cachedPositions)) {
+                return $cachedPositions;
+            }
         }
         
-        // Jika cache kosong, trigger background refresh
-        RefreshUserDataJob::dispatch($this->user->id);
-        
-        // Return empty array atau data dari database
-        return $this->getFallbackPositions();
-    }
-    
-    /**
-     * Optimized refresh
-     */
-    public function refreshData()
-    {
-        $this->loading = true;
-        
-        // Gunakan service untuk force refresh
-        $result = $this->tradingService->forceRefreshUserData($this->user->id);
-        
-        if ($result['success']) {
-            session()->flash('message', 'Data refresh initiated. It may take a few seconds.');
-        } else {
-            session()->flash('error', 'Refresh failed: ' . $result['message']);
-        }
-        
-        $this->loading = false;
-    }
-    
+        // Jika cache kosong atau tidak ada, gunakan data langsung
+        return $this->binancePositions;
+    }    
+ 
     /**
      * Get trading statistics
      */
     public function getTradingStats()
     {
-        return $this->tradingService->getTradingStatistics($this->user->id);
+        try {
+            if ($this->tradingService && method_exists($this->tradingService, 'getTradingStatistics')) {
+                return $this->tradingService->getTradingStatistics($this->user->id);
+            }
+            return [];
+        } catch (\Exception $e) {
+            Log::error("Failed to get trading stats: " . $e->getMessage());
+            return [];
+        }
     }
     /**
      * Load pending orders untuk user
@@ -931,11 +921,22 @@ class RealTradingPage extends Component
      */
     public function refreshData()
     {
-        $this->forceLoadUserData();
-        $this->loadUserAccounts();
-        $this->loadPendingOrders();
-        $this->loadBinancePositions();
-        session()->flash('message', 'All data refreshed successfully!');
+        $this->loading = true; // Gunakan $loading yang sudah dideklarasikan
+        
+        try {
+            $this->forceLoadUserData();
+            $this->loadUserAccounts();
+            $this->loadPendingOrders();
+            $this->loadBinancePositions();
+            
+            session()->flash('message', 'All data refreshed successfully!');
+            
+        } catch (\Exception $e) {
+            session()->flash('error', 'Refresh failed: ' . $e->getMessage());
+            Log::error("Refresh data failed: " . $e->getMessage());
+        }
+        
+        $this->loading = false;
     }
 
     public function upgradeToRealTrading()

@@ -28,66 +28,46 @@ return [
     |
     */
 
+    // config/queue.php
     'connections' => [
-
-        'sync' => [
-            'driver' => 'sync',
-        ],
-
-        'database' => [
-            'driver' => 'database',
-            'table' => 'jobs',
-            'queue' => 'default',
-            'retry_after' => 90,
-            'after_commit' => false,
-        ],
-
-        'beanstalkd' => [
-            'driver' => 'beanstalkd',
-            'host' => 'localhost',
-            'queue' => 'default',
-            'retry_after' => 90,
-            'block_for' => 0,
-            'after_commit' => false,
-        ],
-
-        'sqs' => [
-            'driver' => 'sqs',
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'prefix' => env('SQS_PREFIX', 'https://sqs.us-east-1.amazonaws.com/your-account-id'),
-            'queue' => env('SQS_QUEUE', 'default'),
-            'suffix' => env('SQS_SUFFIX'),
-            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-            'after_commit' => false,
-        ],
-
         'redis' => [
             'driver' => 'redis',
-            'connection' => 'default',
+            'connection' => 'queue',
             'queue' => env('REDIS_QUEUE', 'default'),
             'retry_after' => 90,
             'block_for' => null,
             'after_commit' => false,
         ],
-
+        
+        // KHUSUS TRADING
+        'trading' => [
+            'driver' => 'redis',
+            'connection' => 'trading',
+            'queue' => 'trading',
+            'retry_after' => 300, // 5 menit untuk trading
+            'timeout' => 290,     // Timeout sedikit sebelum retry_after
+            'block_for' => 5,
+            'after_commit' => true,
+        ],
+        
+        'trading_batch' => [
+            'driver' => 'redis',
+            'connection' => 'trading',
+            'queue' => 'trading_batch',
+            'retry_after' => 600, // 10 menit untuk batch
+            'timeout' => 590,
+            'block_for' => 5,
+            'after_commit' => true,
+        ],
+        
+        'sync' => [
+            'driver' => 'redis',
+            'connection' => 'trading',
+            'queue' => 'sync',
+            'retry_after' => 180,
+            'timeout' => 170,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
     ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Failed Queue Jobs
-    |--------------------------------------------------------------------------
-    |
-    | These options configure the behavior of failed queue job logging so you
-    | can control which database and table are used to store the jobs that
-    | have failed. You may change them to any database / table you wish.
-    |
-    */
-
-    'failed' => [
-        'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
-        'database' => env('DB_CONNECTION', 'mysql'),
-        'table' => 'failed_jobs',
-    ],
-
 ];
