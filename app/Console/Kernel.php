@@ -85,11 +85,11 @@ class Kernel extends ConsoleKernel
                  ->runInBackground();
         
         // Summary generation - every 5 minutes
-        $schedule->command('summary:generate-top')
-                 ->everyFiveMinutes()
-                 ->name('summary-generation')
-                 ->withoutOverlapping(300)
-                 ->runInBackground();
+       // $schedule->command('summary:generate-top')
+           //      ->everyFiveMinutes()
+            //     ->name('summary-generation')
+            //     ->withoutOverlapping(300)
+             //    ->runInBackground();
         
         // Auto PNL update - every 5 minutes
         $schedule->command('trading:auto-update-pnl')

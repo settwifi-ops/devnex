@@ -20,6 +20,7 @@
         "livewire/livewire": "^3.5",
         "midtrans/midtrans-php": "^2.6",
         "openai-php/client": "^0.18.0",
+        "predis/predis": "^3.3",
         "pusher/pusher-php-server": "^7.2",
         "stripe/stripe-php": "^19.0"
     },

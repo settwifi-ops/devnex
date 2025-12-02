@@ -119,33 +119,65 @@ return [
     |
     */
 
+    // config/database.php - Update bagian redis
     'redis' => [
-
-        'client' => env('REDIS_CLIENT', 'phpredis'),
-
+        'client' => env('REDIS_CLIENT', 'predis'),
+        
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
             'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
+            'persistent' => true,
         ],
 
         'default' => [
             'url' => env('REDIS_URL'),
             'host' => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
             'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_DB', '0'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_DB', 0),
+            'read_write_timeout' => 60,
+        ],
+
+        // KHUSUS UNTUK TRADING CACHE
+        'trading' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_TRADING_DB', 3),
+            'read_write_timeout' => 30,
+            'persistent' => true,
+            'options' => [
+                'serializer' => 'igbinary', // Jika diinstall
+                'compression' => 'lz4',     // Jika diinstall
+            ]
         ],
 
         'cache' => [
-            'url' => env('REDIS_URL'),
             'host' => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
             'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_CACHE_DB', '1'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_CACHE_DB', 0),
         ],
 
-    ],
+        'queue' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_QUEUE_DB', 1),
+        ],
 
+        'session' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_SESSION_DB', 2),
+        ],
+
+        'websocket' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_WEBSOCKET_DB', 4),
+        ],
+    ],
 ];
