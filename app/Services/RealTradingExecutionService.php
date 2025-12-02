@@ -19,7 +19,7 @@ class RealTradingExecutionService
     private $takeProfitPercentage = 4.0; // 4% take profit
     private $riskPerTrade = 0.02; // 2% risk per trade
     private $orderExpiryMinutes = 15; // 15 menit expiry
-    private $leverage = 5; // 5x leverage
+    private $leverage = 20; // 5x leverage
 
     public function __construct(BinanceAccountService $binanceAccountService)
     {
