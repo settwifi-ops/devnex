@@ -217,7 +217,7 @@ class RealTradingPage extends Component
     }
 
     /**
-     * Load trading positions langsung dari Binance API
+     * Load trading positions dari Binance API (Jaggedsoft Library Version)
      */
     public function loadBinancePositions()
     {
@@ -234,54 +234,154 @@ class RealTradingPage extends Component
             $binanceService = app(BinanceAccountService::class);
             $binance = $binanceService->getBinanceInstance($this->user->id);
             
-            // 1. Get all open positions from Binance
-            $positions = $binance->futuresPositionRisk();
+            // JAGGEDSOFT LIBRARY - Method yang biasanya tersedia:
+            // 1. futuresAccount() - Untuk futures account
+            // 2. account() - Untuk spot account
+            // 3. prices() - Untuk harga market
+            // 4. balances() - Untuk balances spot
             
-            // 2. Filter hanya yang ada positionAmount (ada posisi terbuka)
-            $activePositions = array_filter($positions, function($position) {
-                return (float) $position['positionAmt'] != 0;
-            });
+            $positionsData = [];
             
-            // 3. Format data
+            // Coba futuresAccount() terlebih dahulu
+            if (method_exists($binance, 'futuresAccount')) {
+                try {
+                    $accountInfo = $binance->futuresAccount();
+                    
+                    if (isset($accountInfo['positions']) && is_array($accountInfo['positions'])) {
+                        $positionsData = $accountInfo['positions'];
+                        Log::info("✅ Found positions in futuresAccount[positions]", ['count' => count($positionsData)]);
+                    } else {
+                        // Coba cari di seluruh array
+                        foreach ($accountInfo as $key => $value) {
+                            if (is_array($value) && count($value) > 0) {
+                                $firstItem = $value[0] ?? null;
+                                if (is_array($firstItem) && isset($firstItem['symbol'])) {
+                                    $positionsData = $value;
+                                    Log::info("✅ Found positions in key: {$key}", ['count' => count($positionsData)]);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("futuresAccount() error: " . $e->getMessage());
+                }
+            }
+            
+            // Jika masih kosong, coba account() sebagai fallback
+            if (empty($positionsData) && method_exists($binance, 'account')) {
+                try {
+                    $accountInfo = $binance->account();
+                    
+                    if (isset($accountInfo['balances']) && is_array($accountInfo['balances'])) {
+                        // Convert balances to positions format
+                        foreach ($accountInfo['balances'] as $balance) {
+                            if (isset($balance['asset']) && (float) ($balance['free'] ?? 0) != 0) {
+                                $positionsData[] = [
+                                    'symbol' => $balance['asset'] . 'USDT',
+                                    'positionAmt' => (float) $balance['free'],
+                                    'entryPrice' => 0,
+                                    'markPrice' => 0,
+                                    'unRealizedProfit' => 0
+                                ];
+                            }
+                        }
+                        Log::info("✅ Converted balances to positions", ['count' => count($positionsData)]);
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("account() error: " . $e->getMessage());
+                }
+            }
+            
+            // Filter dan format positions
             $formattedPositions = [];
             $totalUnrealizedPnl = 0;
             
-            foreach ($activePositions as $position) {
-                $positionAmt = (float) $position['positionAmt'];
-                $entryPrice = (float) $position['entryPrice'];
-                $markPrice = (float) $position['markPrice'];
-                $unrealizedProfit = (float) $position['unRealizedProfit'];
+            foreach ($positionsData as $position) {
+                if (!is_array($position)) continue;
                 
-                // Determine side (positive amount = LONG, negative = SHORT)
+                // Cek berbagai kemungkinan field untuk amount
+                $positionAmt = 0;
+                if (isset($position['positionAmt'])) {
+                    $positionAmt = (float) $position['positionAmt'];
+                } elseif (isset($position['positionAmount'])) {
+                    $positionAmt = (float) $position['positionAmount'];
+                } elseif (isset($position['amount'])) {
+                    $positionAmt = (float) $position['amount'];
+                } elseif (isset($position['quantity'])) {
+                    $positionAmt = (float) $position['quantity'];
+                }
+                
+                // Skip jika amount 0
+                if ($positionAmt == 0) continue;
+                
+                $symbol = $position['symbol'] ?? '';
+                if (empty($symbol)) continue;
+                
+                // Format data position
+                $formattedPosition = [
+                    'symbol' => $symbol,
+                    'positionAmt' => $positionAmt,
+                    'entryPrice' => (float) ($position['entryPrice'] ?? $position['avgPrice'] ?? 0),
+                    'markPrice' => (float) ($position['markPrice'] ?? $position['currentPrice'] ?? 0),
+                    'unRealizedProfit' => (float) ($position['unRealizedProfit'] ?? $position['unrealizedProfit'] ?? $position['pnl'] ?? 0),
+                    'leverage' => (int) ($position['leverage'] ?? 1),
+                    'liquidationPrice' => (float) ($position['liquidationPrice'] ?? 0),
+                    'marginType' => $position['marginType'] ?? 'isolated',
+                    'isolatedMargin' => (float) ($position['isolatedMargin'] ?? 0),
+                    'positionSide' => $position['positionSide'] ?? 'BOTH'
+                ];
+                
+                // Tentukan side berdasarkan amount
                 $side = $positionAmt > 0 ? 'BUY' : 'SELL';
                 $positionType = $positionAmt > 0 ? 'LONG' : 'SHORT';
                 $quantity = abs($positionAmt);
                 
-                // Calculate P&L percentage
-                $pnlPercentage = $entryPrice > 0 ? ($unrealizedProfit / ($entryPrice * $quantity)) * 100 : 0;
+                // Ambil harga current jika markPrice 0
+                $currentPrice = $formattedPosition['markPrice'];
+                if ($currentPrice <= 0) {
+                    try {
+                        $prices = $binance->prices();
+                        $searchSymbol = str_replace('_', '', $symbol);
+                        if (isset($prices[$searchSymbol])) {
+                            $currentPrice = (float) $prices[$searchSymbol];
+                        }
+                    } catch (\Exception $e) {
+                        $currentPrice = $formattedPosition['entryPrice'] > 0 ? $formattedPosition['entryPrice'] : 1;
+                    }
+                }
                 
-                $formattedPosition = [
-                    'symbol' => $position['symbol'],
+                // Hitung P&L percentage
+                $pnl = $formattedPosition['unRealizedProfit'];
+                $pnlPercentage = 0;
+                if ($formattedPosition['entryPrice'] > 0 && $quantity > 0) {
+                    $positionValue = $formattedPosition['entryPrice'] * $quantity;
+                    if ($positionValue > 0) {
+                        $pnlPercentage = ($pnl / $positionValue) * 100;
+                    }
+                }
+                
+                $formattedPositions[] = [
+                    'symbol' => $symbol,
                     'side' => $side,
                     'position_type' => $positionType,
-                    'entry_price' => $entryPrice,
-                    'mark_price' => $markPrice,
+                    'entry_price' => $formattedPosition['entryPrice'],
+                    'mark_price' => $currentPrice,
                     'quantity' => $quantity,
-                    'unrealized_pnl' => $unrealizedProfit,
+                    'unrealized_pnl' => $pnl,
                     'pnl_percentage' => $pnlPercentage,
-                    'leverage' => (int) $position['leverage'],
-                    'liquidation_price' => (float) $position['liquidationPrice'],
-                    'margin_type' => $position['marginType'],
-                    'isolated_margin' => (float) $position['isolatedMargin'],
-                    'position_side' => $position['positionSide'],
-                    'index' => count($formattedPositions) // Untuk reference di modal
+                    'leverage' => $formattedPosition['leverage'],
+                    'liquidation_price' => $formattedPosition['liquidationPrice'],
+                    'margin_type' => $formattedPosition['marginType'],
+                    'isolated_margin' => $formattedPosition['isolatedMargin'],
+                    'position_side' => $formattedPosition['positionSide'],
+                    'index' => count($formattedPositions)
                 ];
                 
-                $formattedPositions[] = $formattedPosition;
-                $totalUnrealizedPnl += $unrealizedProfit;
+                $totalUnrealizedPnl += $pnl;
             }
             
-            // 4. Sort by unrealized P&L (biggest losers first, then winners)
+            // Sort by P&L
             usort($formattedPositions, function($a, $b) {
                 return $a['unrealized_pnl'] <=> $b['unrealized_pnl'];
             });
@@ -301,7 +401,6 @@ class RealTradingPage extends Component
             $this->binancePositions = [];
             $this->activePositionsCount = 0;
             $this->totalUnrealizedPnl = 0;
-            session()->flash('error', 'Failed to load positions from Binance: ' . $e->getMessage());
         }
         
         $this->loadingPositions = false;
@@ -336,7 +435,7 @@ class RealTradingPage extends Component
                 try {
                     if (!$order->binance_order_id) continue;
                     
-                    // Cek status di Binance
+                    // Cek status di Binance menggunakan futuresGetOrder
                     $binanceStatus = $binance->futuresGetOrder([
                         'symbol' => $order->symbol,
                         'orderId' => $order->binance_order_id
@@ -418,36 +517,45 @@ class RealTradingPage extends Component
             // Determine order side (opposite of position)
             $orderSide = $side === 'BUY' ? 'SELL' : 'BUY';
             
-            // Get current price untuk market order
-            $ticker = $binance->futuresPrices();
+            // Get current price
+            $ticker = $binance->prices();
             $currentPrice = null;
             
-            foreach ($ticker as $item) {
-                if ($item['symbol'] === $symbol) {
-                    $currentPrice = (float) $item['price'];
-                    break;
-                }
+            $tickerSymbol = str_replace('_', '', $symbol);
+            if (isset($ticker[$tickerSymbol])) {
+                $currentPrice = (float) $ticker[$tickerSymbol];
+            } elseif (isset($ticker[$symbol])) {
+                $currentPrice = (float) $ticker[$symbol];
+            } else {
+                $currentPrice = $positionData['mark_price'] ?? $positionData['entry_price'] ?? 0;
             }
             
-            if (!$currentPrice) {
-                throw new \Exception("Failed to get current price for {$symbol}");
-            }
-            
-            // Place market order to close position
-            $order = $binance->futuresNewOrder([
+            Log::info("📤 Closing Position", [
                 'symbol' => $symbol,
                 'side' => $orderSide,
-                'type' => 'MARKET',
                 'quantity' => $quantity,
-                'reduceOnly' => true,
+                'current_price' => $currentPrice
             ]);
             
-            Log::info("📤 CLOSE POSITION ORDER", [
-                'symbol' => $symbol,
-                'side' => $orderSide,
-                'quantity' => $quantity,
+            // Place market order to close position
+            // Gunakan method yang tersedia di jaggedsoft
+            if (method_exists($binance, 'futuresMarket')) {
+                $order = $binance->futuresMarket($symbol, $orderSide, $quantity, [
+                    'reduceOnly' => true
+                ]);
+            } elseif (method_exists($binance, 'futuresOrder')) {
+                $order = $binance->futuresOrder($symbol, $orderSide, $quantity, 0, 'MARKET', [
+                    'reduceOnly' => true
+                ]);
+            } elseif (method_exists($binance, 'order')) {
+                $order = $binance->order($symbol, $orderSide, $quantity, 0, 'MARKET');
+            } else {
+                throw new \Exception("No order method available");
+            }
+            
+            Log::info("✅ Close Order Placed", [
                 'order_id' => $order['orderId'] ?? 'N/A',
-                'price' => $currentPrice
+                'status' => $order['status'] ?? 'N/A'
             ]);
             
             // Tunggu sebentar lalu reload positions
@@ -592,7 +700,7 @@ class RealTradingPage extends Component
             // Get Binance instance
             $binance = $binanceService->getBinanceInstance($this->user->id);
             
-            // Cancel order di Binance
+            // Cancel order di Binance menggunakan futuresCancel
             $result = $binance->futuresCancel(
                 $this->orderToCancel->symbol, 
                 $this->orderToCancel->binance_order_id

@@ -762,6 +762,81 @@ class BinanceAccountService
         }
     }
     /**
+     * Get futures positions menggunakan jaggedsoft library
+     */
+    public function getFuturesPositions($userId)
+    {
+        try {
+            $api = $this->getBinanceInstance($userId);
+            
+            if (method_exists($api, 'futuresAccount')) {
+                $accountInfo = $api->futuresAccount();
+                
+                if (isset($accountInfo['positions'])) {
+                    return $accountInfo['positions'];
+                }
+                
+                // Alternative: cari positions di struktur data
+                foreach ($accountInfo as $key => $value) {
+                    if (is_array($value) && isset($value[0]['positionAmt'])) {
+                        return $value;
+                    }
+                }
+                
+                return [];
+            }
+            
+            throw new \Exception("futuresAccount() method not available");
+            
+        } catch (\Exception $e) {
+            Log::error("Failed to get futures positions: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Test all available methods in library
+     */
+    public function testLibraryMethods($userId)
+    {
+        try {
+            $api = $this->getBinanceInstance($userId);
+            $methods = get_class_methods($api);
+            
+            $testResults = [];
+            
+            // Test important methods
+            $importantMethods = [
+                'futuresAccount',
+                'account',
+                'prices',
+                'balances',
+                'futuresMarket',
+                'futuresOrder',
+                'order',
+                'futuresCancel',
+                'cancel'
+            ];
+            
+            foreach ($importantMethods as $method) {
+                $testResults[$method] = method_exists($api, $method);
+            }
+            
+            return [
+                'success' => true,
+                'total_methods' => count($methods),
+                'important_methods' => $testResults,
+                'all_methods_sample' => array_slice($methods, 0, 30)
+            ];
+            
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
+        }
+    }
+    /**
      * Fix corrupted encrypted data
      */
     public function fixEncryptedData($userId, $newApiKey, $newApiSecret, $isTestnet = true)
