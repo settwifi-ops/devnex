@@ -4,126 +4,231 @@ namespace App\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
-use App\Services\TradingExecutionService;
+use Illuminate\Support\Facades\Log;
 
 class Kernel extends ConsoleKernel
 {
     /**
      * Define the application's command schedule.
-     *
-     * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
-     * @return void
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Jalankan command update sektor tiap 30 menit
-        $schedule->command('sectors:update')->everyFifteenMinutes();
-        $schedule->command('signals:update-categories')->everyThirtyMinutes();
-        $schedule->command('market:advanced-update')->everyFifteenMinutes();
-        $schedule->command('market:update')->everyFiveMinutes();
-        $schedule->command('signals:fetch')
+        // ==================== 1. REAL-TIME JOBS ====================
+        
+        // SL/TP Monitoring - setiap 30 detik
+        $schedule->command('trading:monitor-sltp')
                  ->everyMinute()
-                 ->appendOutputTo(storage_path('logs/auto_log.txt'));; 
-        $schedule->command('performance:fetch')
+                 ->name('sltp-monitoring')
+                 ->withoutOverlapping(40)
+                 ->runInBackground();
+        
+        // Auto-close positions - setiap menit
+        $schedule->command('trading:auto-close-positions')
                  ->everyMinute()
-                 ->appendOutputTo(storage_path('logs/auto_log.txt'));;
-        $schedule->command('signals:analyze --limit=20')
-                 ->everyFiveMinutes()
-                 ->withoutOverlapping()
-                 ->appendOutputTo(storage_path('logs/signal-analysis.log'));
-        $schedule->command('summary:generate-top')->everyFiveMinutes();
-        // 15-minute signal scan (hanya scan, tidak execute)
-        // Auto PNL update setiap 15 menit
-        $schedule->command('trading:auto-update-pnl')
+                 ->name('auto-close-positions')
+                 ->withoutOverlapping(70)
+                 ->runInBackground();
+        
+        // Update floating PnL - setiap menit
+        $schedule->command('trading:update-floating-pnl')
                  ->everyMinute()
-                 ->withoutOverlapping();
-
-        // Auto close positions setiap 30 menit
-        $schedule->command('trading:auto-close')
+                 ->name('update-floating-pnl')
+                 ->withoutOverlapping(70)
+                 ->runInBackground();
+        
+        // ==================== 2. HIGH FREQUENCY JOBS ====================
+        
+        // Market updates - every 5 minutes
+        $schedule->command('market:advanced-update')
                  ->everyThirtyMinutes()
-                 ->withoutOverlapping();
-
-        // Signal-based trading setiap 2 jam
+                 ->name('market-advanced-update')
+                 ->withoutOverlapping(600)
+                 ->runInBackground();
+                 
+        $schedule->command('market:update')
+                 ->everyThirtyMinutes()
+                 ->name('market-basic-update')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // Signals fetching - every 5 minutes
+        $schedule->command('signals:fetch')
+                 ->everyFiveMinutes()
+                 ->name('signals-fetch')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+                 
+        $schedule->command('performance:fetch')
+                 ->everyFiveMinutes()
+                 ->name('performance-fetch')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // Signal analysis - every 5 minutes
+        $schedule->command('signals:analyze --limit=5')
+                 ->everyFiveMinutes()
+                 ->name('signals-analyze')
+                 ->withoutOverlapping(900)
+                 ->runInBackground();
+        
+        // Summary generation - every 5 minutes
+        $schedule->command('summary:generate-top')
+                 ->everyFiveMinutes()
+                 ->name('summary-generation')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // Auto PNL update - every 5 minutes
+        $schedule->command('trading:auto-update-pnl')
+                 ->everyFiveMinutes()
+                 ->name('auto-pnl-update')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // ==================== 3. MEDIUM FREQUENCY JOBS ====================
+        
+        // Signal scan with execution - every 10 minutes
         $schedule->command('signals:scan --execute')
                  ->everyTenMinutes()
-                 ->withoutOverlapping();
-        // SL/TP Monitoring - setiap 30 detik (untuk manual SL/TP)
-        $schedule->call(function () {
-            app(TradingExecutionService::class)->executeSLTPMonitoring();
-        })->everyThirtySeconds();
-        // Check expired pending orders setiap menit
-        $schedule->call(function () {
-            app(\App\Services\RealTradingExecutionService::class)->checkPendingOrders();
-        })->everyMinute()->name('check-pending-orders')->withoutOverlapping();
-        // Auto-close rules - setiap menit (untuk auto rules)
-        $schedule->call(function () {
-            app(TradingExecutionService::class)->autoClosePositions();
-        })->everyMinute();
-
-        // Update floating PnL - setiap menit
-        $schedule->call(function () {
-            app(TradingExecutionService::class)->updateAllFloatingPnL();
-        })->everyMinute();
-        // ✅ NEW: Performance analytics
-        $schedule->call(function () {
-            $analytics = app(\App\Services\PerformanceAnalyticsService::class);
-            $analytics->generateDailyReport();
-            $analytics->analyzeRegimePerformance(7); // Weekly analysis
-        })->dailyAt('23:00');
-
-        $schedule->call(function () {
-            $analytics = app(\App\Services\PerformanceAnalyticsService::class);
-            $analytics->analyzeRegimeSpecificPerformance(30);
-            $analytics->analyzeAIDecisionAccuracy(30);
-            $analytics->getTopPerformingSymbols(5, 30);
-        })->sundays()->at('00:00');
-            // ✅ NEW: Weekly optimization
-        $schedule->call(function () {
-            $adaptive = app(\App\Services\AdaptiveLearningService::class);
-            $optimization = $adaptive->getOptimizationRecommendations();
-            
-            // Log optimization results
-            Log::info("🔄 Weekly Strategy Optimization Completed", [
-                'recommendations' => $optimization['recommendations'],
-                'timestamp' => now()
-            ]);
-        })->sundays()->at('02:00');
-        // Daily optimization at market close
-        $schedule->call(function () {
-            app(\App\Services\AdaptiveLearningService::class)->dailyOptimization();
-        })->dailyAt('00:00');
+                 ->name('trading-execution')
+                 ->withoutOverlapping(1800)
+                 ->runInBackground();
         
-        // Weekly deep learning
-        $schedule->call(function () {
-            app(\App\Services\AdaptiveLearningService::class)->weeklyDeepLearning();
-        })->sundays()->at('02:00');
+        // Sector updates - every 15 minutes
+        $schedule->command('sectors:update')
+                 ->everyFifteenMinutes()
+                 ->name('sectors-update')
+                 ->withoutOverlapping(1800)
+                 ->runInBackground();
+        
+        // Signal categories - every 30 minutes
+        $schedule->command('signals:update-categories')
+                 ->everyThirtyMinutes()
+                 ->name('signal-categories-update')
+                 ->withoutOverlapping(2700)
+                 ->runInBackground();
+        
+        // Auto close positions - every 30 minutes
+        $schedule->command('trading:auto-close')
+                 ->everyThirtyMinutes()
+                 ->name('auto-close-batch')
+                 ->withoutOverlapping(2700)
+                 ->runInBackground();
+        
+        // ==================== 4. LOW FREQUENCY JOBS ====================
         
         // Hourly performance monitoring
-        $schedule->call(function () {
-            app(\App\Services\AdaptiveLearningService::class)->hourlyPerformanceCheck();
-        })->hourly();
+        $schedule->command('adaptive:hourly-check')
+                 ->hourly()
+                 ->name('hourly-performance-check')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // Daily performance analytics - 23:00
+        $schedule->command('analytics:daily-report')
+                 ->dailyAt('23:00')
+                 ->name('daily-performance-analytics')
+                 ->withoutOverlapping(3600)
+                 ->runInBackground();
+        
+        // Daily optimization - 00:00
+        $schedule->command('adaptive:daily-optimization')
+                 ->dailyAt('00:00')
+                 ->name('daily-optimization')
+                 ->withoutOverlapping(7200)
+                 ->runInBackground();
+        
+        // Weekly analytics - Sunday at 00:00
+        $schedule->command('analytics:weekly-report')
+                 ->sundays()->at('00:00')
+                 ->name('weekly-analytics')
+                 ->withoutOverlapping(10800)
+                 ->runInBackground();
+        
+        // Weekly optimization - Sunday at 02:00
+        $schedule->command('adaptive:weekly-optimization')
+                 ->sundays()->at('02:00')
+                 ->name('weekly-optimization')
+                 ->withoutOverlapping(14400)
+                 ->runInBackground();
+        
+        // Weekly deep learning - Sunday at 02:10
+        $schedule->command('adaptive:weekly-deep-learning')
+                 ->sundays()->at('02:10')
+                 ->name('weekly-deep-learning')
+                 ->withoutOverlapping(21600)
+                 ->runInBackground();
+        
+        // ==================== 5. MAINTENANCE JOBS ====================
+        
+        // Queue monitoring - every 5 minutes
+        $schedule->command('queue:monitor default,high,low --max=1000')
+                 ->everyFiveMinutes()
+                 ->name('queue-monitor')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // Scheduler health check - hourly
+        $schedule->command('scheduler:health-check')
+                 ->hourly()
+                 ->name('scheduler-health-check')
+                 ->withoutOverlapping(300)
+                 ->runInBackground();
+        
+        // Log rotation - daily at 04:00
+        $schedule->command('log:clean --days=7')
+                 ->dailyAt('04:00')
+                 ->name('log-clean')
+                 ->withoutOverlapping(1800)
+                 ->runInBackground();
+        
+        // Cache cleanup - daily at 03:00
+        $schedule->command('cache:prune-stale-tags')
+                 ->dailyAt('03:00')
+                 ->name('cache-prune')
+                 ->withoutOverlapping(1800)
+                 ->runInBackground();
     }
 
+    /**
+     * Register the commands for the application.
+     */
     protected $commands = [
+        // Existing commands
         Commands\TestBinanceCommand::class,
         Commands\TestOpenAICommand::class,
         Commands\CheckSignalsCommand::class,
         Commands\UpdateSignalAnalysisCommand::class,
         Commands\DebugSignalAnalysisCommand::class,
         Commands\CheckDatabaseCommand::class,
-        Commands\TestRealTrading::class,
-        ];
-
+        
+        // New scheduler commands
+        Commands\MonitorSLTPCommand::class,
+        Commands\AutoClosePositionsCommand::class,
+        Commands\UpdateFloatingPnLCommand::class,
+        Commands\AnalyticsDailyReportCommand::class,
+        Commands\AnalyticsWeeklyReportCommand::class,
+        Commands\AdaptiveHourlyCheckCommand::class,
+        Commands\AdaptiveDailyOptimizationCommand::class,
+        Commands\AdaptiveWeeklyOptimizationCommand::class,
+        Commands\AdaptiveWeeklyDeepLearningCommand::class,
+        Commands\SchedulerHealthCheckCommand::class,
+    ];
 
     /**
      * Register the commands for the application.
-     *
-     * @return void
      */
     protected function commands()
     {
         $this->load(__DIR__.'/Commands');
-
         require base_path('routes/console.php');
+    }
+    
+    /**
+     * Get the timeout for long running commands.
+     */
+    protected function getCommandTimeout(): int
+    {
+        return 7200;
     }
 }
