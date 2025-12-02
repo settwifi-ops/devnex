@@ -145,10 +145,20 @@ class RealTradingPage extends Component
     {
         try {
             $this->pendingOrders = PendingOrder::where('user_id', $this->user->id)
-                ->whereIn('status', ['PENDING', 'PARTIALLY_FILLED'])
+                ->whereIn('status', ['PENDING', 'PARTIALLY_FILLED', 'NEW']) // Tambah NEW
+                ->where(function($query) {
+                    $query->where('order_status', 'NEW')
+                          ->orWhere('order_status', 'PARTIALLY_FILLED')
+                          ->orWhereNull('order_status'); // Untuk yang belum di-update
+                })
                 ->with('aiDecision')
                 ->orderBy('created_at', 'desc')
                 ->get()
+                ->filter(function ($order) {
+                    // FILTER TAMBAHAN: Pastikan tidak FILLED di Binance
+                    $binanceStatus = strtoupper($order->order_status ?? '');
+                    return !in_array($binanceStatus, ['FILLED', 'EXECUTED', 'CANCELLED']);
+                })
                 ->map(function ($order) {
                     return [
                         'id' => $order->id,
@@ -158,6 +168,7 @@ class RealTradingPage extends Component
                         'limit_price' => $order->limit_price,
                         'quantity' => $order->quantity,
                         'status' => $order->status,
+                        'order_status' => $order->order_status, // ← INI PENTING!
                         'binance_order_id' => $order->binance_order_id,
                         'created_at' => $order->created_at->format('Y-m-d H:i:s'),
                         'expires_at' => $order->expires_at ? $order->expires_at->format('Y-m-d H:i:s') : null,
@@ -173,9 +184,10 @@ class RealTradingPage extends Component
                 
             $this->pendingOrdersCount = count($this->pendingOrders);
             
-            Log::info("📦 PENDING ORDERS LOADED", [
+            Log::info("📦 PENDING ORDERS LOADED (Filtered)", [
                 'user_id' => $this->user->id,
-                'count' => $this->pendingOrdersCount
+                'count' => $this->pendingOrdersCount,
+                'statuses' => array_column($this->pendingOrders, 'order_status')
             ]);
             
         } catch (\Exception $e) {
@@ -193,17 +205,75 @@ class RealTradingPage extends Component
         $this->refreshingOrders = true;
         
         try {
-            // Check expired orders via service
-            $expiredCount = $this->realTradingService->checkPendingOrders();
+            // 1. Cek status di Binance untuk semua pending orders
+            $binanceService = app(BinanceAccountService::class);
+            $binance = $binanceService->getBinanceInstance($this->user->id);
             
-            if ($expiredCount > 0) {
-                session()->flash('info', "{$expiredCount} expired orders cancelled");
+            // Ambil semua pending orders
+            $pendingOrders = PendingOrder::where('user_id', $this->user->id)
+                ->whereIn('status', ['PENDING', 'PARTIALLY_FILLED', 'NEW'])
+                ->get();
+            
+            $filledCount = 0;
+            $cancelledCount = 0;
+            
+            foreach ($pendingOrders as $order) {
+                try {
+                    // Skip jika tidak ada binance_order_id
+                    if (!$order->binance_order_id) continue;
+                    
+                    // Cek status di Binance
+                    $binanceStatus = $binance->futuresGetOrder([
+                        'symbol' => $order->symbol,
+                        'orderId' => $order->binance_order_id
+                    ]);
+                    
+                    $orderStatus = $binanceStatus['status'] ?? 'UNKNOWN';
+                    $executedQty = $binanceStatus['executedQty'] ?? 0;
+                    
+                    // Update status lokal
+                    $order->update([
+                        'order_status' => $orderStatus,
+                        'executed_qty' => $executedQty,
+                        'avg_price' => $binanceStatus['avgPrice'] ?? 0,
+                        'last_checked' => now()
+                    ]);
+                    
+                    // Jika sudah FILLED di Binance
+                    if ($orderStatus === 'FILLED') {
+                        $order->update(['status' => 'FILLED']);
+                        $filledCount++;
+                        
+                        // Tambah notes
+                        $order->update([
+                            'notes' => 'Auto-filled at ' . now()->format('Y-m-d H:i:s') . 
+                                      ' | Price: $' . ($binanceStatus['avgPrice'] ?? 'N/A')
+                        ]);
+                    }
+                    
+                    // Jika CANCELLED di Binance
+                    if ($orderStatus === 'CANCELLED') {
+                        $order->update(['status' => 'CANCELLED']);
+                        $cancelledCount++;
+                    }
+                    
+                } catch (\Exception $e) {
+                    Log::warning("Failed to check Binance status for order {$order->id}: " . $e->getMessage());
+                }
             }
             
-            // Reload orders
+            // 2. Check expired orders via service
+            $expiredCount = $this->realTradingService->checkPendingOrders();
+            
+            // 3. Reload orders
             $this->loadPendingOrders();
             
-            session()->flash('message', 'Pending orders refreshed!');
+            $message = 'Pending orders refreshed!';
+            if ($filledCount > 0) $message .= " {$filledCount} order(s) filled.";
+            if ($cancelledCount > 0) $message .= " {$cancelledCount} order(s) cancelled.";
+            if ($expiredCount > 0) $message .= " {$expiredCount} order(s) expired.";
+            
+            session()->flash('message', $message);
             
         } catch (\Exception $e) {
             session()->flash('error', 'Refresh failed: ' . $e->getMessage());
@@ -211,7 +281,6 @@ class RealTradingPage extends Component
         
         $this->refreshingOrders = false;
     }
-
     /**
      * Confirm order cancellation
      */

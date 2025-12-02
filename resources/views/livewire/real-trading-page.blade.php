@@ -490,104 +490,226 @@
                     </button>
                 </div>
 
-                <!-- ✅ PENDING ORDERS SECTION -->
+                <!-- ✅ IMPROVED: PENDING ORDERS SECTION -->
                 @if($pendingOrdersCount > 0)
                 <div class="bg-white border border-orange-200 rounded-2xl p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-900">
                             ⏳ Pending Orders ({{ $pendingOrdersCount }})
                         </h3>
-                        <button 
-                            wire:click="refreshPendingOrders"
-                            wire:loading.attr="disabled"
-                            class="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
-                        >
-                            @if($refreshingOrders)
-                                <i class="fas fa-spinner fa-spin mr-1"></i>
-                                Refreshing...
-                            @else
-                                <i class="fas fa-sync-alt mr-1"></i>
-                                Refresh
-                            @endif
-                        </button>
+                        <div class="flex items-center space-x-2">
+                            <button 
+                                wire:click="refreshPendingOrders"
+                                wire:loading.attr="disabled"
+                                class="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+                            >
+                                @if($refreshingOrders)
+                                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                                    Refreshing...
+                                @else
+                                    <i class="fas fa-sync-alt mr-1"></i>
+                                    Refresh Status
+                                @endif
+                            </button>
+                        </div>
                     </div>
 
                     <div class="space-y-3">
                         @foreach($pendingOrders as $order)
-                        <div class="border border-orange-100 rounded-xl p-4 bg-orange-50">
-                            <div class="flex items-center justify-between">
-                                <div class="flex-1">
-                                    <div class="flex items-center space-x-3 mb-2">
-                                        <span class="font-semibold text-gray-900 text-lg">{{ $order['symbol'] }}</span>
-                                        <span class="px-2 py-1 text-xs rounded-full 
-                                            {{ $order['side'] === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                            {{ $order['side'] }}
-                                        </span>
-                                        <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                                            {{ $order['position_type'] }}
-                                        </span>
-                                    </div>
-                                    
-                                    <div class="grid grid-cols-2 gap-4 text-sm">
-                                        <div>
-                                            <span class="text-gray-600">Limit Price:</span>
-                                            <span class="font-semibold ml-2">${{ number_format($order['limit_price'], 4) }}</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Quantity:</span>
-                                            <span class="font-semibold ml-2">{{ number_format($order['quantity'], 6) }}</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mt-2 flex items-center space-x-4 text-sm">
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-gray-600">Expires:</span>
-                                            <span class="font-semibold text-orange-600">
-                                                {{ \Carbon\Carbon::parse($order['expires_at'])->diffForHumans() }}
+                            @php
+                                $orderSummary = $this->getOrderSummary($order);
+                                $isFilled = isset($order['order_status']) && strtoupper($order['order_status']) === 'FILLED';
+                                $isExpired = $orderSummary['is_expired'];
+                            @endphp
+                            
+                            @if(!$isFilled)
+                            <div class="border border-orange-100 rounded-xl p-4 bg-orange-50">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-3 mb-2">
+                                            <span class="font-semibold text-gray-900 text-lg">{{ $order['symbol'] }}</span>
+                                            <span class="px-2 py-1 text-xs rounded-full 
+                                                {{ $order['side'] === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                                {{ $order['side'] }}
+                                            </span>
+                                            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                                {{ $order['position_type'] }}
+                                            </span>
+                                            
+                                            <!-- ✅ BINANCE STATUS BADGE -->
+                                            @if(isset($order['order_status']) && $order['order_status'])
+                                            <span class="px-2 py-1 text-xs rounded-full 
+                                                {{ strtoupper($order['order_status']) === 'FILLED' ? 'bg-green-100 text-green-800' : 
+                                                   (strtoupper($order['order_status']) === 'PARTIALLY_FILLED' ? 'bg-yellow-100 text-yellow-800' : 
+                                                   (strtoupper($order['order_status']) === 'CANCELLED' ? 'bg-red-100 text-red-800' : 
+                                                   (strtoupper($order['order_status']) === 'NEW' ? 'bg-blue-100 text-blue-800' : 
+                                                   'bg-gray-100 text-gray-800'))) }}">
+                                                Binance: {{ $order['order_status'] }}
+                                            </span>
+                                            @endif
+                                            
+                                            <!-- LOCAL STATUS BADGE -->
+                                            <span class="px-2 py-1 text-xs rounded-full 
+                                                {{ strtoupper($order['status']) === 'PENDING' ? 'bg-orange-100 text-orange-800' : 
+                                                   (strtoupper($order['status']) === 'PARTIALLY_FILLED' ? 'bg-yellow-100 text-yellow-800' : 
+                                                   'bg-gray-100 text-gray-800') }}">
+                                                Local: {{ $order['status'] }}
                                             </span>
                                         </div>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-gray-600">Placed:</span>
-                                            <span class="text-gray-500">
-                                                {{ \Carbon\Carbon::parse($order['created_at'])->format('H:i:s') }}
-                                            </span>
+                                        
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                            <div>
+                                                <span class="text-gray-600">Limit Price:</span>
+                                                <span class="font-semibold ml-2">${{ number_format($order['limit_price'], 4) }}</span>
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-600">Quantity:</span>
+                                                <span class="font-semibold ml-2">{{ number_format($order['quantity'], 6) }}</span>
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-600">Total Value:</span>
+                                                <span class="font-semibold ml-2">${{ number_format($order['limit_price'] * $order['quantity'], 2) }}</span>
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-600">Expires:</span>
+                                                <span class="font-semibold {{ $orderSummary['is_expired'] ? 'text-red-600' : 'text-orange-600' }}">
+                                                    {{ $orderSummary['time_left'] }}
+                                                </span>
+                                            </div>
                                         </div>
+                                        
+                                        <div class="mt-2 flex items-center space-x-4 text-sm">
+                                            <div class="flex items-center space-x-2">
+                                                <span class="text-gray-600">Order ID:</span>
+                                                <span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                                    {{ $order['binance_order_id'] ?? 'N/A' }}
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <span class="text-gray-600">Placed:</span>
+                                                <span class="text-gray-500">
+                                                    {{ \Carbon\Carbon::parse($order['created_at'])->format('H:i:s') }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        
+                                        @if($order['notes'])
+                                        <div class="mt-2 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                                            <i class="fas fa-sticky-note mr-1"></i>
+                                            {{ $order['notes'] }}
+                                        </div>
+                                        @endif
                                     </div>
-                                </div>
-                                
-                                <div class="flex items-center space-x-2">
-                                    <button 
-                                        wire:click="cancelPendingOrder({{ $order['id'] }})"
-                                        wire:confirm="Are you sure you want to cancel this order?"
-                                        wire:loading.attr="disabled"
-                                        class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-                                    >
-                                        <i class="fas fa-times mr-1"></i> Cancel
-                                    </button>
+                                    
+                                    <div class="flex flex-col space-y-2 ml-4">
+                                        <!-- Check Status Button -->
+                                        <button 
+                                            wire:click="checkOrderStatus({{ $order['id'] }})"
+                                            class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
+                                            title="Check current status on Binance"
+                                        >
+                                            <i class="fas fa-search mr-1"></i> Check
+                                        </button>
+                                        
+                                        <!-- Cancel Button -->
+                                        <button 
+                                            wire:click="confirmCancelOrder({{ $order['id'] }})"
+                                            wire:loading.attr="disabled"
+                                            class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                                            {{ $orderSummary['is_expired'] ? 'disabled' : '' }}
+                                        >
+                                            @if($cancellingOrderId == $order['id'])
+                                                <i class="fas fa-spinner fa-spin mr-1"></i>
+                                                Cancelling...
+                                            @else
+                                                <i class="fas fa-times mr-1"></i> Cancel
+                                            @endif
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                            @endif
                         @endforeach
                     </div>
                     
                     <div class="mt-4 text-center text-sm text-gray-500">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Orders will auto-cancel in 15 minutes if not filled
+                        Orders will auto-cancel in 15 minutes if not filled • Click "Refresh Status" to update
                     </div>
                 </div>
                 @else
                 <!-- No Pending Orders Placeholder -->
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 mb-6">
                     <div class="text-center py-4 text-gray-500">
-                        <i class="fas fa-clock text-3xl mb-3 opacity-50"></i>
-                        <p class="font-semibold">No Pending Orders</p>
-                        <p class="text-sm mt-1">Limit orders will appear here when AI executes trades</p>
+                        <i class="fas fa-check-circle text-3xl mb-3 text-green-500 opacity-80"></i>
+                        <p class="font-semibold text-lg">No Pending Orders</p>
+                        <p class="text-sm mt-1">All orders are filled or cancelled. New limit orders will appear here.</p>
                         <button 
                             wire:click="refreshPendingOrders"
-                            class="mt-3 text-blue-500 hover:text-blue-700 text-sm font-semibold"
+                            class="mt-3 inline-flex items-center text-blue-500 hover:text-blue-700 text-sm font-semibold"
                         >
                             <i class="fas fa-sync-alt mr-1"></i> Check for new orders
                         </button>
+                    </div>
+                </div>
+                @endif
+
+                <!-- ✅ FIXED: Order Cancel Confirmation Modal -->
+                @if($showCancelConfirm && $orderToCancel)
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900">Confirm Cancellation</h3>
+                                <button 
+                                    wire:click="closeCancelConfirm"
+                                    class="text-gray-400 hover:text-gray-600"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <p class="text-gray-600 mb-3">Are you sure you want to cancel this order?</p>
+                                
+                                <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                    <div class="flex items-center space-x-3">
+                                        <i class="fas fa-exclamation-triangle text-yellow-500 text-xl"></i>
+                                        <div>
+                                            <div class="font-semibold">{{ $orderToCancel->symbol }}</div>
+                                            <div class="text-sm">
+                                                {{ $orderToCancel->side }} • {{ $orderToCancel->position_type }}
+                                            </div>
+                                            <div class="text-sm mt-1">
+                                                Price: ${{ number_format($orderToCancel->limit_price, 4) }} • 
+                                                Qty: {{ number_format($orderToCancel->quantity, 6) }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3">
+                                <button 
+                                    wire:click="closeCancelConfirm"
+                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    wire:click="cancelPendingOrder"
+                                    wire:loading.attr="disabled"
+                                    class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                                >
+                                    @if($cancellingOrderId)
+                                        <i class="fas fa-spinner fa-spin mr-1"></i>
+                                        Processing...
+                                    @else
+                                        Yes, Cancel Order
+                                    @endif
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 @endif
@@ -684,17 +806,24 @@
         @endif
 
     </div>
-<!-- ✅ FIX: JavaScript untuk handle redirect setelah connect -->
-<script>
-document.addEventListener('livewire:initialized', () => {
-    @this.on('binance-connected', () => {
-        console.log('🔧 Binance connected event received');
-        
-        // Force reload component setelah 1 detik
-        setTimeout(() => {
-            window.location.reload();
-        }, 1000);
+
+    <!-- ✅ Fixed JavaScript -->
+    <script>
+    document.addEventListener('livewire:initialized', () => {
+        @this.on('binance-connected', () => {
+            console.log('🔧 Binance connected event received');
+            
+            // Show success message
+            Livewire.dispatch('show-toast', {
+                type: 'success',
+                message: 'Binance connected successfully!'
+            });
+            
+            // Force reload component setelah 1 detik
+            setTimeout(() => {
+                @this.refreshData();
+            }, 1000);
+        });
     });
-});
-</script>
+    </script>
 </div>
