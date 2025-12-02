@@ -34,7 +34,9 @@ class RealTradingPage extends Component
     public $refreshing = false;
     public $toggling = false;
     public $loading = false; 
-    
+    public $fromCache = false;
+    public $lastCacheUpdate = null;
+    public $cacheStats = [];
     // Account management
     public $showAccountManagement = false;
     public $deleting = false;
@@ -79,16 +81,126 @@ class RealTradingPage extends Component
         $this->forceLoadUserData();
         $this->loadUserAccounts();
         $this->loadPendingOrders();
-        $this->loadBinancePositions();
+        
+        // ✅ OPTIMIZATION: Load positions dengan cache-first approach
+        // Tapi cek dulu apakah user punya Binance account
+        if ($this->binanceConnected && $this->hasActiveBinanceAccount()) {
+            $this->loadCachedPositionsFirst();
+        } else {
+            // Jika tidak punya account, set empty positions
+            $this->binancePositions = [];
+            $this->activePositionsCount = 0;
+            $this->totalUnrealizedPnl = 0;
+            $this->fromCache = false;
+            
+            Log::warning("User {$this->user->id} tidak memiliki Binance account aktif, skipping position load");
+        }
         
         Log::info("🔍 MOUNT - Initial State", [
             'user_id' => $this->user->id,
             'has_subscription' => $this->hasRealSubscription,
             'binance_connected' => $this->binanceConnected,
             'trading_enabled' => $this->realTradingEnabled,
+            'has_active_account' => $this->hasActiveBinanceAccount(),
             'pending_orders' => $this->pendingOrdersCount,
-            'binance_positions' => count($this->binancePositions)
+            'binance_positions' => count($this->binancePositions),
+            'from_cache' => $this->fromCache ?? false
         ]);
+    }
+    /**
+     * ✅ NEW METHOD: Load positions dari cache dulu, jika tidak ada baru dari Binance
+     */
+    private function loadCachedPositionsFirst()
+    {
+        try {
+            // Cek cache dulu
+            $cachedPositions = $this->tradingCache->getPositions($this->user->id);
+            
+            if (!empty($cachedPositions)) {
+                $this->binancePositions = $cachedPositions;
+                $this->activePositionsCount = count($cachedPositions);
+                $this->totalUnrealizedPnl = array_sum(array_column($cachedPositions, 'unrealized_pnl'));
+                $this->fromCache = true;
+                
+                Log::debug("✅ Positions loaded from cache", [
+                    'user_id' => $this->user->id,
+                    'count' => $this->activePositionsCount
+                ]);
+                
+                // Trigger background refresh untuk update data terbaru
+                $this->triggerBackgroundPositionRefresh();
+                
+            } else {
+                // Jika cache kosong, load dari Binance
+                $this->loadBinancePositions();
+                $this->fromCache = false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error("Failed to load cached positions: " . $e->getMessage(), [
+                'user_id' => $this->user->id
+            ]);
+            
+            // Fallback langsung ke Binance API
+            $this->loadBinancePositions();
+            $this->fromCache = false;
+        }
+    }
+    /**
+     * ✅ NEW: Check if user has active Binance account
+     */
+    public function hasActiveBinanceAccount(): bool
+    {
+        try {
+            return $this->user->binanceAccounts()
+                ->active()
+                ->verified()
+                ->exists();
+        } catch (\Exception $e) {
+            Log::warning("Failed to check Binance account: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * ✅ NEW: Get Binance account status
+     */
+    public function getBinanceAccountStatus(): array
+    {
+        try {
+            $accounts = $this->user->binanceAccounts()
+                ->select(['is_testnet', 'is_active', 'is_verified', 'created_at'])
+                ->get();
+            
+            return [
+                'has_accounts' => $accounts->isNotEmpty(),
+                'active_accounts' => $accounts->where('is_active', true)->count(),
+                'verified_accounts' => $accounts->where('is_verified', true)->count(),
+                'testnet_accounts' => $accounts->where('is_testnet', true)->count(),
+                'mainnet_accounts' => $accounts->where('is_testnet', false)->count(),
+                'accounts' => $accounts
+            ];
+        } catch (\Exception $e) {
+            Log::error("Failed to get Binance account status: " . $e->getMessage());
+            return ['has_accounts' => false];
+        }
+    }
+    /**
+     * ✅ NEW METHOD: Trigger background refresh untuk positions
+     */
+    private function triggerBackgroundPositionRefresh()
+    {
+        try {
+            if ($this->binanceConnected && $this->realTradingEnabled) {
+                RefreshUserDataJob::dispatch($this->user->id)
+                    ->onQueue('sync')
+                    ->delay(now()->addSeconds(2));
+                
+                Log::debug("✅ Background refresh triggered for user {$this->user->id}");
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to trigger background refresh: " . $e->getMessage());
+        }
     }
 
     /**
@@ -114,23 +226,33 @@ class RealTradingPage extends Component
                 $this->futuresBalance = $portfolio->real_balance ?? 0;
                 $this->isTestnet = ($portfolio->binance_environment ?? 'testnet') === 'testnet';
 
+                // ✅ TAMBAHKAN LOGGING DETAIL
+                $accountStatus = $this->getBinanceAccountStatus();
+                
                 Log::info("✅ FORCE LOAD - Data Loaded", [
                     'user_id' => $this->user->id,
                     'has_subscription' => $this->hasRealSubscription,
                     'binance_connected' => $this->binanceConnected,
                     'trading_enabled' => $this->realTradingEnabled,
                     'real_balance' => $this->realBalance,
-                    'is_testnet' => $this->isTestnet
+                    'is_testnet' => $this->isTestnet,
+                    'has_active_account' => $this->hasActiveBinanceAccount(),
+                    'account_status' => $accountStatus
                 ]);
+                
             } else {
                 $this->resetToDefaultState();
-                Log::warning("❌ FORCE LOAD - No Portfolio", ['user_id' => $this->user->id]);
+                Log::warning("❌ FORCE LOAD - No Portfolio", [
+                    'user_id' => $this->user->id,
+                    'has_active_account' => $this->hasActiveBinanceAccount()
+                ]);
             }
 
         } catch (\Exception $e) {
             Log::error("❌ FORCE LOAD - Error", [
                 'user_id' => $this->user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             $this->resetToDefaultState();
         }
@@ -163,18 +285,26 @@ class RealTradingPage extends Component
      */
     public function getPositionsProperty()
     {
+        // Jika sudah ada positions yang di-load, gunakan itu
+        if (!empty($this->binancePositions)) {
+            return $this->binancePositions;
+        }
+        
         // Coba dari cache dulu
-        if ($this->tradingCache && method_exists($this->tradingCache, 'getPositions')) {
+        try {
             $cachedPositions = $this->tradingCache->getPositions($this->user->id);
             
             if (!empty($cachedPositions)) {
+                $this->fromCache = true;
                 return $cachedPositions;
             }
+        } catch (\Exception $e) {
+            Log::warning("Cache read failed: " . $e->getMessage());
         }
         
-        // Jika cache kosong atau tidak ada, gunakan data langsung
-        return $this->binancePositions;
-    }    
+        // Fallback ke empty array
+        return [];
+    }   
  
     /**
      * Get trading statistics
@@ -255,29 +385,95 @@ class RealTradingPage extends Component
     }
 
     /**
-     * Load trading positions dari Binance API (Jaggedsoft Library Version)
+     * Load trading positions dari Binance API dengan CACHE optimization & proper error handling
      */
     public function loadBinancePositions()
     {
         $this->loadingPositions = true;
         
         try {
+            // ✅ CEK DULU: Apakah user memiliki Binance account yang aktif?
             if (!$this->binanceConnected) {
                 $this->binancePositions = [];
                 $this->activePositionsCount = 0;
                 $this->totalUnrealizedPnl = 0;
+                
+                Log::warning("User {$this->user->id} tidak memiliki koneksi Binance aktif");
+                $this->loadingPositions = false;
                 return;
             }
             
+            // ✅ CEK CACHE DULU - Optimization
+            $cachedPositions = $this->tradingCache->getPositions($this->user->id);
+            
+            if (!empty($cachedPositions)) {
+                $this->binancePositions = $cachedPositions;
+                $this->activePositionsCount = count($cachedPositions);
+                $this->totalUnrealizedPnl = array_sum(array_column($cachedPositions, 'unrealized_pnl'));
+                
+                Log::info("📊 POSITIONS FROM CACHE", [
+                    'user_id' => $this->user->id,
+                    'count' => $this->activePositionsCount,
+                    'total_pnl' => $this->totalUnrealizedPnl
+                ]);
+                
+                $this->loadingPositions = false;
+                return; // ✅ RETURN EARLY - Tidak perlu hit API
+            }
+            
+            Log::info("🔄 FETCHING FROM BINANCE - Cache miss for user {$this->user->id}");
+            
+            // ✅ CEK: Apakah user memiliki Binance account sebelum membuat instance
             $binanceService = app(BinanceAccountService::class);
-            $binance = $binanceService->getBinanceInstance($this->user->id);
             
-            // JAGGEDSOFT LIBRARY - Method yang biasanya tersedia:
-            // 1. futuresAccount() - Untuk futures account
-            // 2. account() - Untuk spot account
-            // 3. prices() - Untuk harga market
-            // 4. balances() - Untuk balances spot
+            // Cek dulu apakah user punya account aktif
+            $hasActiveAccount = $this->user->binanceAccounts()
+                ->active()
+                ->verified()
+                ->exists();
             
+            if (!$hasActiveAccount) {
+                Log::warning("User {$this->user->id} tidak memiliki Binance account aktif");
+                
+                // Set empty positions
+                $this->binancePositions = [];
+                $this->activePositionsCount = 0;
+                $this->totalUnrealizedPnl = 0;
+                
+                // Cache empty positions untuk menghindari request berulang
+                $this->tradingCache->cachePositions($this->user->id, []);
+                
+                $this->loadingPositions = false;
+                return;
+            }
+            
+            try {
+                // ✅ DAPATKAN BINANCE INSTANCE dengan error handling
+                $binance = $binanceService->getBinanceInstance($this->user->id);
+                
+                if (!$binance) {
+                    throw new \Exception("Failed to initialize Binance instance");
+                }
+                
+            } catch (\Exception $e) {
+                Log::error("❌ Binance Instance Creation Failed", [
+                    'user_id' => $this->user->id,
+                    'error' => $e->getMessage()
+                ]);
+                
+                // Set empty positions
+                $this->binancePositions = [];
+                $this->activePositionsCount = 0;
+                $this->totalUnrealizedPnl = 0;
+                
+                // Cache empty positions dengan TTL pendek (1 menit)
+                $this->tradingCache->cachePositions($this->user->id, []);
+                
+                $this->loadingPositions = false;
+                return;
+            }
+            
+            // ✅ JIKA BERHASIL DAPAT INSTANCE, LANJUT FETCH DATA
             $positionsData = [];
             
             // Coba futuresAccount() terlebih dahulu
@@ -413,7 +609,7 @@ class RealTradingPage extends Component
                     'margin_type' => $formattedPosition['marginType'],
                     'isolated_margin' => $formattedPosition['isolatedMargin'],
                     'position_side' => $formattedPosition['positionSide'],
-                    'index' => count($formattedPositions)
+                    'updated_at' => now()->timestamp
                 ];
                 
                 $totalUnrealizedPnl += $pnl;
@@ -428,24 +624,45 @@ class RealTradingPage extends Component
             $this->activePositionsCount = count($formattedPositions);
             $this->totalUnrealizedPnl = $totalUnrealizedPnl;
             
-            Log::info("📊 BINANCE POSITIONS LOADED", [
+            // ✅ SIMPAN KE CACHE - Optimization
+            if (!empty($formattedPositions)) {
+                $this->tradingCache->cachePositions($this->user->id, $formattedPositions);
+                Log::debug("✅ Positions cached for user {$this->user->id}");
+            } else {
+                // Cache empty array jika tidak ada positions
+                $this->tradingCache->cachePositions($this->user->id, []);
+            }
+            
+            Log::info("📊 BINANCE POSITIONS LOADED & CACHED", [
                 'user_id' => $this->user->id,
                 'count' => $this->activePositionsCount,
-                'total_unrealized_pnl' => $totalUnrealizedPnl
+                'total_unrealized_pnl' => $totalUnrealizedPnl,
+                'cached' => true
             ]);
             
         } catch (\Exception $e) {
-            Log::error("❌ Failed to load Binance positions: " . $e->getMessage());
+            Log::error("❌ Failed to load Binance positions: " . $e->getMessage(), [
+                'user_id' => $this->user->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            // Fallback ke empty array
             $this->binancePositions = [];
             $this->activePositionsCount = 0;
             $this->totalUnrealizedPnl = 0;
+            
+            // Cache empty positions untuk menghindari request berulang
+            try {
+                $this->tradingCache->cachePositions($this->user->id, []);
+            } catch (\Exception $cacheException) {
+                Log::warning("Failed to cache empty positions: " . $cacheException->getMessage());
+            }
         }
         
         $this->loadingPositions = false;
     }
-
     /**
-     * Refresh pending orders and auto-clean filled ones
+     * Refresh pending orders and auto-clean filled ones dengan cache optimization
      */
     public function refreshPendingOrders()
     {
@@ -514,20 +731,34 @@ class RealTradingPage extends Component
                 $expiredCount = $this->realTradingService->checkPendingOrders();
             }
             
+            // ✅ INVALIDATE CACHE
+            $this->tradingCache->invalidateUserCache($this->user->id);
+            
             // Reload data
             $this->loadPendingOrders();
             $this->loadBinancePositions();
             
+            // ✅ TRIGGER BACKGROUND REFRESH
+            RefreshUserDataJob::dispatch($this->user->id);
+            
             // Tampilkan message
-            $message = 'Orders refreshed!';
+            $message = 'Orders refreshed! Cache invalidated.';
             if ($filledCount > 0) $message .= " {$filledCount} order(s) filled.";
             if ($cancelledCount > 0) $message .= " {$cancelledCount} order(s) cancelled.";
             if ($expiredCount > 0) $message .= " {$expiredCount} order(s) expired.";
             
             session()->flash('message', $message);
             
+            Log::info("🔄 Orders refreshed with cache invalidation", [
+                'user_id' => $this->user->id,
+                'filled' => $filledCount,
+                'cancelled' => $cancelledCount,
+                'expired' => $expiredCount
+            ]);
+            
         } catch (\Exception $e) {
             session()->flash('error', 'Refresh failed: ' . $e->getMessage());
+            Log::error("Refresh pending orders failed: " . $e->getMessage());
         }
         
         $this->refreshingOrders = false;
@@ -915,21 +1146,32 @@ class RealTradingPage extends Component
         $this->loadBinancePositions();
         session()->flash('info', 'Positions refreshed from Binance!');
     }
-
     /**
-     * Refresh semua data
+     * Refresh semua data dengan cache optimization
      */
     public function refreshData()
     {
-        $this->loading = true; // Gunakan $loading yang sudah dideklarasikan
+        $this->loading = true;
         
         try {
+            // ✅ INVALIDATE CACHE DULU
+            $this->tradingCache->invalidateUserCache($this->user->id);
+            
             $this->forceLoadUserData();
             $this->loadUserAccounts();
             $this->loadPendingOrders();
             $this->loadBinancePositions();
             
-            session()->flash('message', 'All data refreshed successfully!');
+            // ✅ TRIGGER BACKGROUND REFRESH UNTUK UPDATE DATA TERBARU
+            RefreshUserDataJob::dispatch($this->user->id)
+                ->onQueue('sync')
+                ->delay(now()->addSeconds(1));
+            
+            session()->flash('message', 'All data refreshed successfully! Cache invalidated.');
+            
+            Log::info("🔄 MANUAL REFRESH with cache invalidation", [
+                'user_id' => $this->user->id
+            ]);
             
         } catch (\Exception $e) {
             session()->flash('error', 'Refresh failed: ' . $e->getMessage());
@@ -938,7 +1180,6 @@ class RealTradingPage extends Component
         
         $this->loading = false;
     }
-
     public function upgradeToRealTrading()
     {
         $this->upgrading = true;
@@ -1174,9 +1415,112 @@ class RealTradingPage extends Component
             'api_secret.min' => 'API Secret must be at least 20 characters'
         ];
     }
+    /**
+     * ✅ NEW: Get cached balance
+     */
+    public function getCachedBalance()
+    {
+        try {
+            $balance = $this->tradingCache->getBalance($this->user->id);
+            if ($balance && isset($balance['total'])) {
+                return [
+                    'total' => $balance['total'],
+                    'available' => $balance['available'] ?? 0,
+                    'cached' => true,
+                    'timestamp' => $balance['timestamp'] ?? null
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to get cached balance: " . $e->getMessage());
+        }
+        
+        return [
+            'total' => $this->realBalance,
+            'available' => $this->futuresBalance,
+            'cached' => false,
+            'timestamp' => null
+        ];
+    }
 
+    /**
+     * ✅ NEW: Force cache refresh
+     */
+    public function forceCacheRefresh()
+    {
+        $this->loading = true;
+        
+        try {
+            // Invalidate semua cache
+            $this->tradingCache->invalidateUserCache($this->user->id);
+            
+            // Trigger background refresh
+            RefreshUserDataJob::dispatch($this->user->id)
+                ->onQueue('trading');
+            
+            // Load fresh data
+            $this->loadBinancePositions();
+            $this->loadPendingOrders();
+            
+            session()->flash('message', 'Cache refreshed! Data will update shortly.');
+            
+            Log::info("🔄 Force cache refresh for user {$this->user->id}");
+            
+        } catch (\Exception $e) {
+            session()->flash('error', 'Cache refresh failed: ' . $e->getMessage());
+            Log::error("Force cache refresh failed: " . $e->getMessage());
+        }
+        
+        $this->loading = false;
+    }
+
+    /**
+     * ✅ NEW: Get cache statistics
+     */
+    public function getCacheStats()
+    {
+        try {
+            $this->cacheStats = $this->tradingCache->getStats();
+            $this->lastCacheUpdate = now()->format('H:i:s');
+        } catch (\Exception $e) {
+            Log::warning("Failed to get cache stats: " . $e->getMessage());
+            $this->cacheStats = [];
+        }
+    }
+
+    /**
+     * ✅ NEW: Update balance dengan cache
+     */
+    public function refreshBalanceWithCache()
+    {
+        $this->refreshing = true;
+        
+        try {
+            $binanceService = app(BinanceAccountService::class);
+            $result = $binanceService->updateBalanceSnapshot($this->user->id);
+            
+            if ($result) {
+                // Invalidate balance cache
+                $this->tradingCache->invalidateUserCache($this->user->id);
+                
+                $this->forceLoadUserData();
+                session()->flash('message', 'Balance updated! Cache invalidated.');
+            } else {
+                session()->flash('error', 'Failed to update balance');
+            }
+            
+        } catch (\Exception $e) {
+            session()->flash('error', 'Error: ' . $e->getMessage());
+        }
+        
+        $this->refreshing = false;
+    }
     public function render()
     {
+        // Get cache stats untuk debugging
+        if (config('app.debug')) {
+            $this->getCacheStats();
+        }
+        
         Log::info("🎯 RENDER - Current State", [
             'user_id' => $this->user->id,
             'has_subscription' => $this->hasRealSubscription,
@@ -1185,7 +1529,9 @@ class RealTradingPage extends Component
             'pending_orders' => $this->pendingOrdersCount,
             'binance_positions' => $this->activePositionsCount,
             'total_unrealized_pnl' => $this->totalUnrealizedPnl,
-            'active_tab' => $this->activeTab
+            'active_tab' => $this->activeTab,
+            'from_cache' => $this->fromCache,
+            'cache_stats' => $this->cacheStats ? 'available' : 'none'
         ]);
 
         return view('livewire.real-trading-page')->layout('layouts.app');

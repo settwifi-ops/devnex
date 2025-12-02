@@ -12,8 +12,7 @@ class MonitorRealTrading extends Command
     protected $signature = 'trading:monitor 
                            {--user= : User ID}
                            {--add-sl : Add stop loss to filled orders}
-                           {--check-expired : Check expired orders}
-                           {--list-sl : List active stop loss orders}';
+                           {--check-expired : Check expired orders}';
     
     protected $description = 'Monitor and maintain real trading orders';
     
@@ -31,57 +30,70 @@ class MonitorRealTrading extends Command
         
         if ($this->option('add-sl')) {
             $this->info('Adding stop loss to filled orders...');
-            $count = $this->tradingService->addStopLossToFilledOrders($userId);
-            $this->info("✅ Added stop loss to {$count} orders");
+            $results = $this->tradingService->addStopLossToFilledOrders($userId);
+            
+            $addedCount = $results['stop_loss_added'] ?? 0;
+            $failedCount = $results['failed'] ?? 0;
+            $totalChecked = $results['total_checked'] ?? 0;
+            
+            $this->info("✅ Added stop loss to {$addedCount} orders");
+            $this->info("   📊 Total checked: {$totalChecked} orders");
+            if ($failedCount > 0) {
+                $this->error("   ❌ Failed: {$failedCount} orders");
+            }
+            
+            return 0;
         }
         
         if ($this->option('check-expired')) {
             $this->info('Checking expired orders...');
-            $count = $this->tradingService->checkPendingOrders();
-            $this->info("✅ Cancelled {$count} expired orders");
-        }
-        
-        if ($this->option('list-sl')) {
-            $this->info('Listing active stop loss orders...');
-            $slOrders = $this->tradingService->getActiveStopLossOrders($userId);
+            $results = $this->tradingService->checkPendingOrders();
             
-            if (empty($slOrders)) {
-                $this->info("No active stop loss orders found");
-            } else {
-                $this->table(
-                    ['Order ID', 'Symbol', 'SL Price', 'SL Order ID', 'Status', 'Triggered'],
-                    array_map(function($order) {
-                        return [
-                            $order['order_id'],
-                            $order['symbol'],
-                            $order['stop_loss_price'],
-                            $order['stop_loss_id'],
-                            $order['status'],
-                            $order['triggered'] ? '✅ YES' : '⏳ NO'
-                        ];
-                    }, $slOrders)
-                );
+            $cancelledCount = $results['cancelled'] ?? 0;
+            $failedCount = $results['failed'] ?? 0;
+            $totalExpired = $results['expired'] ?? 0;
+            
+            $this->info("✅ Cancelled {$cancelledCount} expired orders");
+            if ($failedCount > 0) {
+                $this->error("   ❌ Failed to cancel {$failedCount} orders");
             }
+            $this->info("   📊 Total expired: {$totalExpired} orders");
+            
+            return 0;
         }
         
-        if (!$this->option('add-sl') && !$this->option('check-expired') && !$this->option('list-sl')) {
-            // Default: lakukan semua
-            $this->info('Running complete monitoring...');
-            
-            $this->info('1. Checking expired orders...');
-            $expiredCount = $this->tradingService->checkPendingOrders();
-            $this->info("   ✅ Cancelled {$expiredCount} expired orders");
-            
-            $this->info('2. Adding stop loss to filled orders...');
-            $slCount = $this->tradingService->addStopLossToFilledOrders($userId);
-            $this->info("   ✅ Added stop loss to {$slCount} orders");
-            
-            $this->info('3. Listing active stop loss orders...');
-            $slOrders = $this->tradingService->getActiveStopLossOrders($userId);
-            $this->info("   📊 Found " . count($slOrders) . " active stop loss orders");
-            
-            $this->info("\n🎯 Monitoring completed!");
+        // Default: lakukan semua (tanpa listing)
+        $this->info('Running complete monitoring...');
+        
+        // 1. Check expired orders
+        $this->info('1. Checking expired orders...');
+        $expiredResults = $this->tradingService->checkPendingOrders();
+        
+        $cancelledCount = $expiredResults['cancelled'] ?? 0;
+        $failedExpired = $expiredResults['failed'] ?? 0;
+        $totalExpired = $expiredResults['expired'] ?? 0;
+        
+        $this->info("   ✅ Cancelled {$cancelledCount} expired orders");
+        if ($failedExpired > 0) {
+            $this->error("   ❌ Failed to cancel {$failedExpired} orders");
         }
+        $this->info("   📊 Total expired: {$totalExpired} orders");
+        
+        // 2. Add stop loss
+        $this->info('2. Adding stop loss to filled orders...');
+        $slResults = $this->tradingService->addStopLossToFilledOrders($userId);
+        
+        $addedCount = $slResults['stop_loss_added'] ?? 0;
+        $failedSL = $slResults['failed'] ?? 0;
+        $totalChecked = $slResults['total_checked'] ?? 0;
+        
+        $this->info("   ✅ Added stop loss to {$addedCount} orders");
+        $this->info("   📊 Total checked: {$totalChecked} orders");
+        if ($failedSL > 0) {
+            $this->error("   ❌ Failed: {$failedSL} orders");
+        }
+        
+        $this->info("\n🎯 Monitoring completed!");
         
         return 0;
     }
