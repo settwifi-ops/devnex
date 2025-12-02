@@ -762,14 +762,22 @@ class TradingCacheService
             return false;
         }
     }
-    
     /**
      * Ping Redis connection
      */
     public function ping(): bool
     {
         try {
-            return $this->redis->ping() === true;
+            $response = $this->redis->ping();
+            // Handle berbagai tipe response
+            if (is_bool($response)) {
+                return $response;
+            } elseif (is_string($response)) {
+                return strtoupper($response) === 'PONG';
+            } elseif (is_numeric($response)) {
+                return $response == 1;
+            }
+            return false;
         } catch (\Exception $e) {
             Log::error("Redis ping failed: " . $e->getMessage());
             return false;
