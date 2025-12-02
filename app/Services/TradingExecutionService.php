@@ -17,26 +17,28 @@ class TradingExecutionService
 {
     private $binanceService;
     private $currentDecision; 
+    private $binanceAccountService; // ✅ BARU: Tambah dependency
 
-    public function __construct(BinanceService $binanceService)
+    public function __construct(BinanceService $binanceService, BinanceAccountService $binanceAccountService)
     {
         $this->binanceService = $binanceService;
+        $this->binanceAccountService = $binanceAccountService; // ✅ BARU: Initialize
     }
 
     /**
-     * Execute trading decision for all enabled users
+     * Execute trading decision for all enabled users - FIXED
      */
     public function executeDecision(AiDecision $decision)
     {
-        $this->currentDecision = $decision; // ✅ TAMBAH BARIS INI
+        $this->currentDecision = $decision;
         
         if ($decision->executed) {
             Log::info("Decision {$decision->id} already executed");
-            $this->currentDecision = null; // ✅ TAMBAH BARIS INI (cleanup)
+            $this->currentDecision = null;
             return;
         }
 
-        // ✅ NEW: REGIME VALIDATION
+        // ✅ REGIME VALIDATION
         $regimeValidation = $this->validateWithRegime($decision);
         if (!$regimeValidation['valid']) {
             Log::warning("❌ Regime validation failed for {$decision->symbol}: " . $regimeValidation['reason']);
@@ -48,7 +50,7 @@ class TradingExecutionService
             return;
         }
 
-        // ✅ NEW: DECISION EXPIRY (30 minutes)
+        // ✅ DECISION EXPIRY (30 minutes)
         if ($decision->created_at->diffInMinutes(now()) > 30) {
             Log::warning("🕒 Decision {$decision->id} expired - created at: " . $decision->created_at);
             $decision->update([
@@ -64,9 +66,9 @@ class TradingExecutionService
             return;
         }
 
+        // ✅ GET ALL USERS (VIRTUAL & REAL)
         $enabledUsers = User::whereHas('portfolio', function($query) {
-            $query->where('ai_trade_enabled', true)
-                  ->where('equity', '>', 0);
+            $query->where('ai_trade_enabled', true); // Virtual users
         })->get();
 
         Log::info("🎯 Executing {$decision->action} {$decision->symbol} for " . $enabledUsers->count() . " users");
@@ -77,19 +79,24 @@ class TradingExecutionService
             return;
         }
 
-        $successCount = 0;
+        $virtualCount = 0;
+        $realCount = 0;
+        
         foreach ($enabledUsers as $user) {
             try {
-                DB::transaction(function () use ($user, $decision, &$successCount) {
-                    $executed = $this->executeForUser($user, $decision);
-                    if ($executed) {
-                        $successCount++;
+                DB::transaction(function () use ($user, $decision, &$virtualCount, &$realCount) {
+                    $results = $this->executeBothModes($user, $decision);
+                    if ($results['virtual']) {
+                        $virtualCount++;
                         $this->notifyUserTradeExecution(
                             $user->id,
                             $decision->symbol,
                             $decision->action,
                             "Your {$this->getPositionTypeFromAction($decision->action)} position for {$decision->symbol} has been opened"
                         );
+                    }
+                    if ($results['real']) {
+                        $realCount++;
                     }
                 });
             } catch (\Exception $e) {
@@ -105,19 +112,34 @@ class TradingExecutionService
 
         $decision->update(['executed' => true]);
         
-        if ($successCount > 0) {
+        if ($virtualCount > 0 || $realCount > 0) {
             event(new TradingExecutedEvent(
                 $decision->symbol,
                 $decision->action,
-                "Executed {$decision->action} for {$decision->symbol} - {$successCount}/{$enabledUsers->count()} users",
-                $successCount,
+                "Executed {$decision->action} for {$decision->symbol} - {$virtualCount} virtual, {$realCount} real users",
+                $virtualCount + $realCount,
                 $enabledUsers->count()
             ));
         }
 
-        Log::info("✅ Successfully executed for {$successCount}/{$enabledUsers->count()} users");
-        $this->currentDecision = null; // ✅ TAMBAH BARIS INI (cleanup)
-    }   
+        Log::info("✅ Successfully executed for {$virtualCount} virtual, {$realCount} real users");
+        $this->currentDecision = null;
+    }
+
+    /**
+     * ✅ BARU: Execute Real Trades
+     */
+    private function executeRealTrades(AiDecision $decision)
+    {
+        try {
+            $realTradingService = app(RealTradingExecutionService::class);
+            return $realTradingService->executeRealTrade($decision);
+        } catch (\Exception $e) {
+            Log::error("Real trading execution failed: " . $e->getMessage());
+            return 0;
+        }
+    }
+   
     private function notifyUserTradeExecution($userId, $symbol, $action, $message)
     {
          // ✅ DEBUG: LOG SEBELUM EVENT
@@ -171,30 +193,32 @@ class TradingExecutionService
     }
 
     /**
-     * Execute trading decision for specific user
+     * Execute trading decision for specific user - FIXED
      */
     public function executeForUser(User $user, AiDecision $decision)
     {
+        // ✅ HANYA HANDLE VIRTUAL TRADING
         $portfolio = $user->portfolio;
         
-        if (!$portfolio || !$portfolio->ai_trade_enabled) {
-            Log::warning("User {$user->id} has no portfolio or AI trading disabled");
+        // Validasi virtual trading only
+        if (!$portfolio->ai_trade_enabled) {
+            Log::warning("User {$user->id} virtual trading not enabled");
             return false;
         }
         
-        // Check available balance instead of total balance
+        // Validasi virtual balance only  
         $availableBalance = $portfolio->available_balance;
         if ($availableBalance <= 0) {
-            Log::warning("User {$user->id} has insufficient available balance: {$availableBalance}");
+            Log::warning("User {$user->id} has insufficient virtual balance: {$availableBalance}");
             return false;
         }
 
         $positionType = $this->getPositionTypeFromAction($decision->action);
         
         if ($decision->action === 'BUY') {
-            return $this->executeBuy($user, $portfolio, $decision, $positionType);
+            return $this->executeVirtualBuy($user, $portfolio, $decision, $positionType);
         } elseif ($decision->action === 'SELL') {
-            return $this->executeSell($user, $portfolio, $decision, $positionType);
+            return $this->executeVirtualSell($user, $portfolio, $decision, $positionType);
         }
 
         return false;
@@ -210,9 +234,9 @@ class TradingExecutionService
 
 
     /**
-     * Execute BUY action (open LONG/SHORT position)
+     * Execute VIRTUAL BUY action (open LONG/SHORT position) - RENAMED
      */
-    private function executeBuy(User $user, $portfolio, AiDecision $decision, $positionType)
+    private function executeVirtualBuy(User $user, $portfolio, AiDecision $decision, $positionType)
     {
         // Check opposite position
         $oppositePosition = UserPosition::where('user_id', $user->id)
@@ -258,14 +282,15 @@ class TradingExecutionService
             return false;
         }
 
-        // Calculate position size based on AVAILABLE balance
+        // Calculate position size based on AVAILABLE balance (VIRTUAL ONLY)
         $availableBalance = $portfolio->available_balance;
-        // ✅ UPDATED: Dynamic risk amount dengan regime data
+        
+        // ✅ UPDATED: Dynamic risk amount dengan regime data (VIRTUAL ONLY)
         $riskAmount = $this->calculateRiskAmount($portfolio, $decision->confidence, $decision->symbol);
         
-        // Final check dengan available balance
+        // Final check dengan available balance (VIRTUAL ONLY)
         if (!$portfolio->canOpenPosition($riskAmount)) {
-            Log::warning("Insufficient available balance for user {$user->id}. Available: \${$availableBalance}, Required: \${$riskAmount}");
+            Log::warning("Insufficient virtual balance for user {$user->id}. Available: \${$availableBalance}, Required: \${$riskAmount}");
             return false;
         }
 
@@ -307,6 +332,7 @@ class TradingExecutionService
                 'stop_loss' => $stopLoss,
                 'take_profit' => $takeProfit,
                 'status' => 'OPEN',
+                'is_real_trade' => false, // ✅ VIRTUAL TRADE
                 'opened_at' => now(),
             ]);
 
@@ -324,14 +350,15 @@ class TradingExecutionService
                 'qty' => $quantity,
                 'price' => $currentPrice,
                 'amount' => $riskAmount,
+                'is_real_trade' => false, // ✅ VIRTUAL TRADE
                 'notes' => "AI {$positionType} Trade - Confidence: {$decision->confidence}% - Risk: {$portfolio->risk_value}% - Available Balance: \${$availableBalance}",
             ]);
 
-            Log::info("✅ {$positionType} BUY executed for user {$user->id}: {$quantity} {$decision->symbol} at \${$currentPrice} for \${$riskAmount}. Available Balance: \${$availableBalance}");
+            Log::info("✅ VIRTUAL {$positionType} BUY executed for user {$user->id}: {$quantity} {$decision->symbol} at \${$currentPrice} for \${$riskAmount}. Available Balance: \${$availableBalance}");
             return true;
 
         } catch (\Exception $e) {
-            Log::error("BUY execution failed for user {$user->id}: " . $e->getMessage());
+            Log::error("VIRTUAL BUY execution failed for user {$user->id}: " . $e->getMessage());
             return false;
         }
     }
@@ -397,13 +424,12 @@ class TradingExecutionService
         return [round($stopLoss, 4), round($takeProfit, 4)];
     }
     /**
-     * Execute SELL action (open SHORT position)
+     * Execute VIRTUAL SELL action (open SHORT position) - RENAMED
      */
-    private function executeSell(User $user, $portfolio, AiDecision $decision, $positionType)
+    private function executeVirtualSell(User $user, $portfolio, AiDecision $decision, $positionType)
     {
-        return $this->executeBuy($user, $portfolio, $decision, $positionType);
+        return $this->executeVirtualBuy($user, $portfolio, $decision, $positionType);
     }
-
     /**
      * Calculate Stop Loss dan Take Profit
      */
@@ -1334,7 +1360,73 @@ class TradingExecutionService
         
         return min(1.0, max(0.0, $alignment));
     }
+    /**
+     * ✅ METHOD BARU: Execute both virtual and real trading
+     */
+    private function executeBothModes(User $user, AiDecision $decision)
+    {
+        $portfolio = $user->portfolio;
+        $results = ['virtual' => false, 'real' => false];
+        
+        try {
+            // ✅ VIRTUAL FIRST (Leader)
+            if ($portfolio->ai_trade_enabled) {
+                $results['virtual'] = $this->executeVirtualTrade($user, $decision);
+                
+                // ✅ REAL FOLLOW (Follower) - Hanya jika virtual success
+                if ($results['virtual'] && 
+                    $portfolio->real_trading_enabled && 
+                    $portfolio->real_trading_active &&
+                    $this->hasValidBinanceConnection($user)) {
+                    
+                    $realService = app(RealTradingExecutionService::class);
+                    $results['real'] = $realService->executeForUser($user, $decision);
+                }
+            }
+            
+            return $results;
+            
+        } catch (\Exception $e) {
+            Log::error("Dual execution failed for user {$user->id}: " . $e->getMessage());
+            return $results; // Return whatever succeeded
+        }
+    }
 
+    /**
+     * ✅ METHOD BARU: Execute virtual trade only
+     */
+    private function executeVirtualTrade(User $user, AiDecision $decision)
+    {
+        $portfolio = $user->portfolio;
+        
+        // Validasi virtual-specific
+        if (!$portfolio->ai_trade_enabled || $portfolio->available_balance <= 0) {
+            return false;
+        }
+        
+        $positionType = $this->getPositionTypeFromAction($decision->action);
+        
+        if ($decision->action === 'BUY') {
+            return $this->executeVirtualBuy($user, $portfolio, $decision, $positionType);
+        }
+        
+        return false;
+    }
+
+    // Di TradingExecutionService.php
+    private function hasValidBinanceConnection(User $user)
+    {
+        try {
+            // ✅ SEKARANG PASTI WORK KARENA RELATIONSHIP SUDAH ADA
+            return $user->binanceAccounts()
+                ->where('is_active', true)
+                ->where('verification_status', 'verified')
+                ->exists();
+        } catch (\Exception $e) {
+            Log::error("Binance connection check failed for user {$user->id}: " . $e->getMessage());
+            return false;
+        }
+    }
     /**
      * Check if market is high volatility
      */
@@ -1396,4 +1488,3 @@ class TradingExecutionService
         }
     }
 }
-

@@ -14,7 +14,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'email', 'password', 'trial_ends_at', 
         'premium_ends_at', 'subscription_tier', 'login_token',
-        'country_code', 'is_trial_used'
+        'country_code', 'is_trial_used', 'real_trading_subscribed' // ✅ TAMBAH INI
     ];
 
     protected $hidden = [
@@ -24,6 +24,7 @@ class User extends Authenticatable
     protected $casts = [
         'trial_ends_at' => 'datetime',
         'premium_ends_at' => 'datetime',
+        'real_trading_subscribed' => 'boolean' // ✅ TAMBAH INI
     ];
 
     // ==================== RELATIONSHIPS ====================
@@ -35,11 +36,160 @@ class User extends Authenticatable
 
     /**
      * Relationship to Portfolio model
-     * SATU user memiliki SATU portfolio
      */
     public function portfolio()
     {
         return $this->hasOne(UserPortfolio::class);
+    }
+
+    /**
+     * ✅ RELATIONSHIP DENGAN BINANCE ACCOUNTS
+     */
+    public function binanceAccounts()
+    {
+        return $this->hasMany(UserBinanceAccount::class);
+    }
+
+    /**
+     * ✅ RELATIONSHIP DENGAN POSITIONS
+     */
+    public function positions()
+    {
+        return $this->hasMany(UserPosition::class);
+    }
+
+    /**
+     * ✅ RELATIONSHIP DENGAN TRADE HISTORY
+     */
+    public function tradeHistory()
+    {
+        return $this->hasMany(TradeHistory::class);
+    }
+
+    /**
+     * ✅ RELATIONSHIP DENGAN PENDING ORDERS
+     */
+    public function pendingOrders()
+    {
+        return $this->hasMany(PendingOrder::class);
+    }
+
+    // ==================== REAL TRADING METHODS ====================
+
+    /**
+     * ✅ GET ACTIVE BINANCE ACCOUNT
+     */
+    public function getActiveBinanceAccountAttribute()
+    {
+        return $this->binanceAccounts()
+            ->where('is_active', true)
+            ->where('verification_status', 'verified')
+            ->first();
+    }
+
+    /**
+     * ✅ CHECK IF USER CAN REAL TRADE
+     */
+    public function canRealTrade()
+    {
+        return $this->real_trading_subscribed && 
+               $this->portfolio &&
+               $this->portfolio->canRealTrade() &&
+               $this->getActiveBinanceAccountAttribute();
+    }
+
+    /**
+     * ✅ GET REAL TRADING STATUS
+     */
+    public function getRealTradingStatusAttribute()
+    {
+        if (!$this->real_trading_subscribed) {
+            return 'not_subscribed';
+        }
+
+        if (!$this->portfolio || !$this->portfolio->real_trading_active) {
+            return 'not_connected';
+        }
+
+        if (!$this->portfolio->real_trading_enabled) {
+            return 'paused';
+        }
+
+        return 'active';
+    }
+
+    /**
+     * ✅ GET OPEN POSITIONS COUNT
+     */
+    public function getOpenPositionsCountAttribute()
+    {
+        return $this->positions()
+            ->where('status', 'OPEN')
+            ->count();
+    }
+
+    /**
+     * ✅ GET REAL OPEN POSITIONS COUNT
+     */
+    public function getRealOpenPositionsCountAttribute()
+    {
+        return $this->positions()
+            ->where('status', 'OPEN')
+            ->where('is_real_trade', true)
+            ->count();
+    }
+
+    /**
+     * ✅ GET PENDING ORDERS COUNT
+     */
+    public function getPendingOrdersCountAttribute()
+    {
+        return $this->pendingOrders()
+            ->where('status', 'PENDING')
+            ->count();
+    }
+
+    /**
+     * ✅ GET TOTAL REALIZED PnL
+     */
+    public function getTotalRealizedPnlAttribute()
+    {
+        $virtualPnl = $this->portfolio ? (float) $this->portfolio->realized_pnl : 0;
+        $realPnl = $this->portfolio ? (float) $this->portfolio->real_realized_pnl : 0;
+        
+        return [
+            'virtual' => $virtualPnl,
+            'real' => $realPnl,
+            'total' => $virtualPnl + $realPnl
+        ];
+    }
+
+    /**
+     * ✅ GET TRADING SUMMARY
+     */
+    public function getTradingSummaryAttribute()
+    {
+        return [
+            'virtual' => [
+                'balance' => $this->portfolio ? (float) $this->portfolio->balance : 0,
+                'equity' => $this->portfolio ? (float) $this->portfolio->equity : 0,
+                'open_positions' => $this->getOpenPositionsCountAttribute(),
+                'realized_pnl' => $this->portfolio ? (float) $this->portfolio->realized_pnl : 0,
+                'can_trade' => $this->portfolio ? $this->portfolio->canTrade() : false
+            ],
+            'real' => [
+                'subscribed' => (bool) $this->real_trading_subscribed,
+                'connected' => $this->portfolio ? $this->portfolio->real_trading_active : false,
+                'enabled' => $this->portfolio ? $this->portfolio->real_trading_enabled : false,
+                'balance' => $this->portfolio ? (float) $this->portfolio->real_balance : 0,
+                'equity' => $this->portfolio ? (float) $this->portfolio->real_equity : 0,
+                'open_positions' => $this->getRealOpenPositionsCountAttribute(),
+                'realized_pnl' => $this->portfolio ? (float) $this->portfolio->real_realized_pnl : 0,
+                'pending_orders' => $this->getPendingOrdersCountAttribute(),
+                'can_trade' => $this->canRealTrade(),
+                'status' => $this->getRealTradingStatusAttribute()
+            ]
+        ];
     }
 
     // ==================== TRIAL METHODS ====================
@@ -72,13 +222,11 @@ class User extends Authenticatable
         return $this->is_trial_used || $this->trial_ends_at !== null;
     }
 
-    // ✅ METHOD BARU YANG DITAMBAHKAN
     /**
      * Get trial progress percentage
      */
     public function getTrialProgressPercent()
     {
-        // Jika tidak ada trial_ends_at, return 0
         if (!$this->trial_ends_at) {
             return 0;
         }
@@ -87,17 +235,14 @@ class User extends Authenticatable
         $trialStart = $this->created_at;
         $trialEnd = Carbon::parse($this->trial_ends_at);
 
-        // Jika trial sudah berakhir
         if ($now->greaterThan($trialEnd)) {
             return 100;
         }
 
-        // Jika trial belum mulai (harusnya tidak mungkin, tapi safety check)
         if ($now->lessThan($trialStart)) {
             return 0;
         }
 
-        // Hitung progress persentase
         $totalTrialDuration = $trialStart->diffInSeconds($trialEnd);
         $elapsedDuration = $trialStart->diffInSeconds($now);
 
@@ -125,8 +270,7 @@ class User extends Authenticatable
             return 0;
         }
 
-        // Gunakan diffInDays untuk hasil yang lebih user-friendly
-        return $now->diffInDays($trialEnd, false); // false = tidak dibulatkan
+        return $now->diffInDays($trialEnd, false);
     }
 
     // ==================== PREMIUM METHODS ====================
@@ -158,17 +302,14 @@ class User extends Authenticatable
      */
     public function canAccessPremium()
     {
-        // Jika punya premium aktif → boleh akses
         if ($this->hasActivePremium()) {
             return true;
         }
         
-        // Jika masih trial aktif → boleh akses  
         if ($this->hasActiveTrial()) {
             return true;
         }
         
-        // Semua kondisi lainnya → TIDAK boleh akses
         return false;
     }
 
@@ -223,7 +364,7 @@ class User extends Authenticatable
         $this->update([
             'subscription_tier' => 'premium',
             'premium_ends_at' => $endDate,
-            'trial_ends_at' => null // Hapus trial jika ada
+            'trial_ends_at' => null
         ]);
         
         \Log::info('User premium activated:', [

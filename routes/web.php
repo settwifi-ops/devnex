@@ -33,6 +33,13 @@ use App\Http\Controllers\PositionController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\AuthController;
 
+
+
+// 📄 routes/web.php
+use App\Http\Livewire\RealTradingPage;
+
+
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -167,6 +174,9 @@ Route::middleware(['auth', 'check.single.session', 'check.trial'])->group(functi
 
     // Fallback routes untuk compatibility
     Route::get('/signals/fallback/{symbol}', [SignalController::class, 'show'])->name('signals.fallback');
+    //setelah vps
+    //trading real
+    Route::get('/real-trading', RealTradingPage::class)->name('real-trading');
 });
 
 // ==================== WEBHOOK ROUTES (NO AUTH/MIDDLEWARE) ====================

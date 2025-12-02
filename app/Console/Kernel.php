@@ -51,7 +51,10 @@ class Kernel extends ConsoleKernel
         $schedule->call(function () {
             app(TradingExecutionService::class)->executeSLTPMonitoring();
         })->everyThirtySeconds();
-
+        // Check expired pending orders setiap menit
+        $schedule->call(function () {
+            app(\App\Services\RealTradingExecutionService::class)->checkPendingOrders();
+        })->everyMinute()->name('check-pending-orders')->withoutOverlapping();
         // Auto-close rules - setiap menit (untuk auto rules)
         $schedule->call(function () {
             app(TradingExecutionService::class)->autoClosePositions();
@@ -108,6 +111,7 @@ class Kernel extends ConsoleKernel
         Commands\UpdateSignalAnalysisCommand::class,
         Commands\DebugSignalAnalysisCommand::class,
         Commands\CheckDatabaseCommand::class,
+        Commands\TestRealTrading::class,
         ];
 
 

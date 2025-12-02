@@ -19,7 +19,7 @@
         <img src="/assets/img/logo-ct.png"
           class="inline h-full max-w-full transition-all duration-200 ease-nav-brand max-h-8 logo-image" alt="main_logo" />
         <span
-          class="{{ (Request::is('rtl') ? 'mr-1' : 'ml-1') }} font-semibold transition-all duration-200 ease-nav-brand logo-text">Devnex FlowBoard</span>
+          class="{{ (Request::is('rtl') ? 'mr-1' : 'ml-1') }} font-semibold transition-all duration-200 ease-nav-brand logo-text">Devnex Research</span>
           
         <!-- Animated particles around logo -->
         <div class="logo-particles absolute inset-0 opacity-0 transition-opacity duration-500">
@@ -286,15 +286,40 @@
           </a>
         </li>
 
-        <li class="w-full mt-4 section-divider">
-          <h6
-            class="{{ (Request::is('rtl') ? 'pr-6 mr-2' : 'pl-6 ml-2') }} font-bold leading-tight uppercase text-size-xs opacity-60 section-title">
-            Documentation
-            <!-- Animated underline -->
-            <div class="section-underline w-8 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mt-1 transition-all duration-500"></div>
-          </h6>
-        </li>
+        <!-- Menu Baru: Smart Signals -->
+        <li class="mt-0.5 w-full nav-item">
+          <a class="nav-link py-2.7 text-size-sm ease-nav-brand my-0 mx-4 flex items-center whitespace-nowrap px-4 transition-all duration-300 relative overflow-hidden
+              {{ (Request::is('real-trading*') ? 'shadow-soft-xl rounded-lg bg-white font-semibold text-slate-700 active' : '') }}"
+            href="{{ route('real-trading') }}">
+            
+            <div class="ripple-container absolute inset-0 overflow-hidden rounded-lg pointer-events-none"></div>
+            <div class="hover-bg absolute inset-0 bg-gradient-to-r from-rose-500/10 to-pink-500/10 rounded-lg opacity-0 transition-opacity duration-300"></div>
 
+            <div
+              class="{{ (Request::is('real-trading*') ? ' bg-gradient-fuchsia' : '') }} shadow-soft-2xl mr-2 flex h-8 w-8 items-center justify-center rounded-lg bg-white bg-center stroke-0 text-center xl:p-2.5 relative z-10 icon-wrapper">
+              
+              <div class="icon-bg absolute inset-0 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 opacity-0 transition-all duration-300"></div>
+              
+              <i style="font-size: 1rem;"
+                class="fas fa-circle-nodes text-center {{ (Request::is('real-trading*') ? 'text-white' : 'text-dark') }} relative z-10 icon-fa"
+                aria-hidden="true"></i>
+              
+              <div class="active-indicator absolute -right-1 -top-1 w-2 h-2 bg-green-500 rounded-full opacity-0 transition-opacity duration-300"></div>
+            </div>
+            
+            <span
+              class="{{ (Request::is('rtl') ? 'mr-1' : 'ml-1') }} duration-300 opacity-100 pointer-events-none ease-soft relative z-10 nav-text">Real Trading</span>
+              
+            <!-- Hot Badge -->
+            <div class="new-badge absolute right-8 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-size-xs font-bold opacity-0 transform scale-0 transition-all duration-300">
+              <i class="fas fa-bolt text-size-xs"></i>
+            </div>
+              
+            <div class="nav-arrow absolute right-4 opacity-0 transform translate-x-2 transition-all duration-300">
+              <i class="fas fa-chevron-right text-size-xs"></i>
+            </div>
+          </a>
+        </li>
         <!-- Documentation dengan efek profesional -->
         <li class="mt-0.5 w-full nav-item">
           <a class="nav-link py-2.7 text-size-sm ease-nav-brand my-0 mx-4 flex items-center whitespace-nowrap px-4 transition-all duration-300 relative overflow-hidden

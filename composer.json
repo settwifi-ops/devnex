@@ -9,8 +9,10 @@
     "license": "MIT",
     "require": {
         "php": "^8.1",
-        "guzzlehttp/guzzle": "*",
+        "binance/binance-connector-php": "^3.0",
+        "guzzlehttp/guzzle": "^7.10",
         "intervention/image": "^3.11",
+        "jaggedsoft/php-binance-api": "^0.5.31",
         "laravel/framework": "^11.0",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.23",

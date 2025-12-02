@@ -22,7 +22,15 @@ class UserPortfolio extends Model
         'risk_mode',
         'risk_value',
         'ai_trade_enabled',
-        'last_reset_at'
+        'last_reset_at',
+        // ✅ REAL TRADING FIELDS
+        'real_trading_active',
+        'real_trading_enabled', 
+        'real_balance',
+        'real_equity',
+        'real_realized_pnl',
+        'real_floating_pnl',
+        'binance_connected_at',
     ];
 
     protected $casts = [
@@ -33,7 +41,15 @@ class UserPortfolio extends Model
         'floating_pnl' => 'decimal:2',
         'risk_value' => 'decimal:2',
         'ai_trade_enabled' => 'boolean',
-        'last_reset_at' => 'datetime'
+        'last_reset_at' => 'datetime',
+        // ✅ REAL TRADING CASTS
+        'real_trading_active' => 'boolean',
+        'real_trading_enabled' => 'boolean',
+        'real_balance' => 'decimal:2',
+        'real_equity' => 'decimal:2',
+        'real_realized_pnl' => 'decimal:2',
+        'real_floating_pnl' => 'decimal:2',
+        'binance_connected_at' => 'datetime'
     ];
 
     protected $appends = ['available_balance', 'total_invested'];
@@ -150,6 +166,97 @@ class UserPortfolio extends Model
         ]);
     }
 
+    // ==================== REAL TRADING METHODS ====================
+    /**
+     * ✅ Check if user can real trade
+     */
+    public function canRealTrade(): bool
+    {
+        return $this->real_trading_enabled && 
+               $this->real_trading_active && 
+               (float) $this->real_balance >= 10; // Minimum $10
+    }
+
+    /**
+     * ✅ Calculate real equity
+     */
+    public function calculateRealEquity(): float
+    {
+        $realFloatingPnl = (float) $this->real_floating_pnl;
+        $realEquity = max(0, (float) $this->real_balance + $realFloatingPnl);
+        
+        $this->update([
+            'real_equity' => $realEquity
+        ]);
+        
+        return $realEquity;
+    }
+
+    /**
+     * ✅ Update real balance snapshot
+     */
+    public function updateRealBalance(float $newBalance): bool
+    {
+        return $this->update([
+            'real_balance' => max(0, $newBalance),
+            'real_equity' => max(0, $newBalance + (float) $this->real_floating_pnl)
+        ]);
+    }
+
+    /**
+     * ✅ Add realized PnL to real trading
+     */
+    public function addRealPnl(float $pnl): bool
+    {
+        return DB::transaction(function () use ($pnl) {
+            $portfolio = self::lockForUpdate()->find($this->id);
+            
+            $newRealBalance = max(0, (float) $portfolio->real_balance + $pnl);
+            $newRealRealizedPnl = (float) $portfolio->real_realized_pnl + $pnl;
+            
+            $updated = $portfolio->update([
+                'real_balance' => $newRealBalance,
+                'real_realized_pnl' => $newRealRealizedPnl,
+                'real_equity' => max(0, $newRealBalance + (float) $portfolio->real_floating_pnl)
+            ]);
+
+            if ($updated) {
+                Log::info("Portfolio {$portfolio->id}: Added Real PnL \${$pnl}, New Real Balance: \${$newRealBalance}");
+            }
+            
+            return $updated;
+        });
+    }
+
+    /**
+     * ✅ Update real floating PnL
+     */
+    public function updateRealFloatingPnl(float $newFloatingPnl): bool
+    {
+        return $this->update([
+            'real_floating_pnl' => $newFloatingPnl,
+            'real_equity' => max(0, (float) $this->real_balance + $newFloatingPnl)
+        ]);
+    }
+
+    /**
+     * ✅ Get real trading summary
+     */
+    public function getRealTradingSummary(): array
+    {
+        return [
+            'real_trading_active' => $this->real_trading_active,
+            'real_trading_enabled' => $this->real_trading_enabled,
+            'real_balance' => (float) $this->real_balance,
+            'real_equity' => (float) $this->real_equity,
+            'real_realized_pnl' => (float) $this->real_realized_pnl,
+            'real_floating_pnl' => (float) $this->real_floating_pnl,
+            'binance_connected_at' => $this->binance_connected_at,
+            'binance_environment' => $this->binance_environment,
+            'can_real_trade' => $this->canRealTrade()
+        ];
+    }
+
     // ==================== RISK MANAGEMENT ====================
     public function calculateRiskAmount(float $confidence = 100): float
     {
@@ -192,6 +299,13 @@ class UserPortfolio extends Model
     }
 
     public function canTrade(): bool
+    {
+        return $this->ai_trade_enabled && 
+               (float) $this->equity > 0 && 
+               $this->getAvailableBalanceAttribute() > 0;
+    }
+
+    public function canVirtualTrade(): bool
     {
         return $this->ai_trade_enabled && 
                (float) $this->equity > 0 && 
@@ -324,7 +438,9 @@ class UserPortfolio extends Model
             'ai_trade_enabled' => $this->ai_trade_enabled,
             'can_trade' => $this->canTrade(),
             'is_over_utilized' => $this->isOverUtilized(),
-            'recommended_position_size' => round($this->getRecommendedPositionSize(), 2)
+            'recommended_position_size' => round($this->getRecommendedPositionSize(), 2),
+            // ✅ REAL TRADING SUMMARY
+            'real_trading_summary' => $this->getRealTradingSummary()
         ];
     }
 
@@ -338,6 +454,8 @@ class UserPortfolio extends Model
             $portfolio->equity = max(0, (float) $portfolio->equity);
             $portfolio->balance = max(0, (float) $portfolio->balance);
             $portfolio->initial_balance = max(0, (float) $portfolio->initial_balance);
+            $portfolio->real_equity = max(0, (float) $portfolio->real_equity);
+            $portfolio->real_balance = max(0, (float) $portfolio->real_balance);
         });
     }
 }
