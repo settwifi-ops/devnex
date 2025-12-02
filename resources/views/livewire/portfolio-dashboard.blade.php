@@ -602,45 +602,46 @@
                 </div>
             </div>
         </div>
-        <!-- Open Positions Table - Compact Version -->
-        <!-- Open Positions -->
-        <div class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-100 overflow-hidden hover:shadow-3xl transition-all duration-500 mb-8">
-            <div class="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100/80">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <!-- Open Positions Table -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-100 overflow-hidden mb-8">
+            <!-- Header -->
+            <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100/80">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                     <div>
-                        <h3 class="text-xl font-bold text-gray-900">Open Positions</h3>
-                        <p class="text-gray-600 text-sm mt-1">Active trading positions managed by AI</p>
+                        <h3 class="text-lg sm:text-xl font-bold text-gray-900">Open Positions</h3>
+                        <p class="text-gray-600 text-xs sm:text-sm mt-1">Active trading positions managed by AI</p>
                     </div>
-                    <div class="text-sm text-gray-700 bg-white/80 px-4 py-2 rounded-xl border border-gray-200 font-semibold shadow-lg hover:shadow-xl transition-all duration-300">
+                    <div class="text-xs sm:text-sm text-gray-700 bg-white/80 px-3 sm:px-4 py-2 rounded-xl border border-gray-200 font-semibold shadow-lg">
                         <span class="text-blue-600 font-bold">{{ $this->openPositionsCount }}</span> active positions
                     </div>
                 </div>
             </div>
             
             @if($this->openPositionsCount > 0)
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-max text-sm">
+                <!-- Desktop/Large Tablet View -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full min-w-[800px] text-sm">
                         <thead class="bg-gradient-to-r from-gray-50 to-gray-100/80">
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     Symbol
                                 </th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden md:table-cell">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     Avg Price
                                 </th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden lg:table-cell">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     Current
                                 </th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden md:table-cell">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     Investment
                                 </th>
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     P&L
                                 </th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden lg:table-cell">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     SL/TP
                                 </th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100 hidden sm:table-cell">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                                     Holding
                                 </th>
                                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-100">
@@ -654,44 +655,41 @@
                                     $holdingHours = $position->opened_at->diffInHours(now());
                                     $isProfitable = $position->floating_pnl >= 0;
                                 @endphp
-                                <tr class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-purple-50/50 transition-all duration-300 group cursor-pointer">
+                                <tr class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-purple-50/50 transition-all duration-300">
                                     <!-- Symbol & Type -->
                                     <td class="px-4 py-3 whitespace-nowrap">
                                         <div class="flex items-center space-x-3">
-                                            <div class="w-8 h-8 rounded-lg {{ $position->position_type === 'LONG' ? 'bg-green-500/20' : 'bg-red-500/20' }} flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
+                                            <div class="w-8 h-8 rounded-lg {{ $position->position_type === 'LONG' ? 'bg-green-500/20' : 'bg-red-500/20' }} flex items-center justify-center">
                                                 <i class="fas {{ $position->position_type === 'LONG' ? 'fa-arrow-up text-green-600' : 'fa-arrow-down text-red-600' }} text-xs"></i>
                                             </div>
                                             <div>
-                                                <span class="font-bold text-gray-900 text-sm group-hover:text-blue-600 transition-colors duration-300">{{ $position->symbol }}</span>
+                                                <span class="font-bold text-gray-900 text-sm">{{ $position->symbol }}</span>
                                                 <div class="text-xs text-gray-500 capitalize font-semibold">{{ strtolower($position->position_type) }}</div>
                                             </div>
                                         </div>
                                     </td>
                                     <!-- Avg Price -->
-                                    <td class="px-4 py-3 whitespace-nowrap hidden md:table-cell">
+                                    <td class="px-4 py-3 whitespace-nowrap">
                                         <span class="text-xs font-mono font-semibold text-gray-900">
                                             ${{ number_format($position->avg_price, 4) }}
                                         </span>
                                     </td>
-                                    
                                     <!-- Current Price -->
-                                    <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
+                                    <td class="px-4 py-3 whitespace-nowrap">
                                         <span class="text-xs font-mono font-semibold text-gray-900">
                                             ${{ number_format($position->current_price, 4) }}
                                         </span>
                                     </td>
-                                    
                                     <!-- Investment -->
-                                    <td class="px-4 py-3 whitespace-nowrap hidden md:table-cell">
+                                    <td class="px-4 py-3 whitespace-nowrap">
                                         <span class="text-xs font-mono font-semibold text-gray-900 bg-blue-100/50 px-2 py-1.5 rounded-md">
                                             ${{ number_format($position->investment, 2) }}
                                         </span>
                                     </td>
-                                    
                                     <!-- Floating P&L -->
                                     <td class="px-4 py-3 whitespace-nowrap">
                                         <div class="flex flex-col space-y-1">
-                                            <span class="inline-flex items-center px-2 py-1.5 rounded-full text-xs font-bold transition-all duration-300 {{ $isProfitable ? 'bg-green-500/20 text-green-700 border border-green-200' : 'bg-red-500/20 text-red-700 border border-red-200' }} group-hover:shadow-md">
+                                            <span class="inline-flex items-center px-2 py-1.5 rounded-full text-xs font-bold transition-all duration-300 {{ $isProfitable ? 'bg-green-500/20 text-green-700 border border-green-200' : 'bg-red-500/20 text-red-700 border border-red-200' }}">
                                                 <i class="fas {{ $isProfitable ? 'fa-arrow-up mr-1' : 'fa-arrow-down mr-1' }} text-xs"></i>
                                                 ${{ number_format($position->floating_pnl, 2) }}
                                             </span>
@@ -700,9 +698,8 @@
                                             </span>
                                         </div>
                                     </td>
-                                    
                                     <!-- SL/TP -->
-                                    <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
+                                    <td class="px-4 py-3 whitespace-nowrap">
                                         <div class="space-y-1 text-xs">
                                             <div class="flex items-center space-x-1">
                                                 <i class="fas fa-arrow-down text-red-500 text-xs"></i>
@@ -714,25 +711,23 @@
                                             </div>
                                         </div>
                                     </td>
-                                    
                                     <!-- Holding -->
-                                    <td class="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
+                                    <td class="px-4 py-3 whitespace-nowrap">
                                         <div class="flex items-center space-x-2">
                                             <span class="text-xs font-semibold text-gray-900">{{ $this->getFormattedHoldingTime($position->opened_at) }}</span>  
-                                            <div class="w-2 h-2 {{ $holdingHours < 24 ? 'bg-green-500' : ($holdingHours < 72 ? 'bg-yellow-500' : 'bg-red-500') }} rounded-full shadow-sm"></div>
+                                            <div class="w-2 h-2 {{ $holdingHours < 24 ? 'bg-green-500' : ($holdingHours < 72 ? 'bg-yellow-500' : 'bg-red-500') }} rounded-full"></div>
                                         </div>
                                     </td>
-                                    
                                     <!-- Actions -->
                                     <td class="px-4 py-3 whitespace-nowrap">
                                         <div class="flex space-x-1">
                                             <button 
                                                 wire:click="closePosition({{ $position->id }})"
                                                 wire:confirm="Are you sure you want to close this {{ $position->position_type }} position for {{ $position->symbol }}?"
-                                                class="px-3 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-xs rounded-lg transition-all duration-300 font-semibold shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center space-x-1"
+                                                class="px-3 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-xs rounded-lg transition-all duration-300 font-semibold shadow-md hover:shadow-lg flex items-center space-x-1"
                                                 title="Close Position">
                                                 <i class="fas fa-times text-xs"></i>
-                                                <span class="hidden sm:inline">Close</span>
+                                                <span>Close</span>
                                             </button>
                                         </div>
                                     </td>
@@ -741,22 +736,128 @@
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- Mobile/Tablet View (Card Layout) -->
+                <div class="md:hidden">
+                    @foreach($openPositions as $position)
+                        @php
+                            $holdingHours = $position->opened_at->diffInHours(now());
+                            $isProfitable = $position->floating_pnl >= 0;
+                        @endphp
+                        <div class="border-b border-gray-100 p-4 hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-purple-50/50 transition-all duration-300">
+                            <!-- Card Header -->
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-lg {{ $position->position_type === 'LONG' ? 'bg-green-500/20' : 'bg-red-500/20' }} flex items-center justify-center">
+                                        <i class="fas {{ $position->position_type === 'LONG' ? 'fa-arrow-up text-green-600' : 'fa-arrow-down text-red-600' }}"></i>
+                                    </div>
+                                    <div>
+                                        <span class="font-bold text-gray-900 text-base">{{ $position->symbol }}</span>
+                                        <div class="text-sm text-gray-500 capitalize font-semibold">{{ strtolower($position->position_type) }}</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold {{ $isProfitable ? 'bg-green-500/20 text-green-700 border border-green-200' : 'bg-red-500/20 text-red-700 border border-red-200' }}">
+                                        ${{ number_format($position->floating_pnl, 2) }}
+                                    </span>
+                                    <div class="text-xs font-semibold mt-1 {{ $isProfitable ? 'text-green-600' : 'text-red-600' }}">
+                                        {{ $position->pnl_percentage >= 0 ? '+' : '' }}{{ number_format($position->pnl_percentage, 2) }}%
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Card Content Grid -->
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <div>
+                                    <div class="text-xs text-gray-500 font-medium mb-1">Avg Price</div>
+                                    <div class="text-sm font-mono font-semibold text-gray-900">${{ number_format($position->avg_price, 4) }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-gray-500 font-medium mb-1">Current Price</div>
+                                    <div class="text-sm font-mono font-semibold text-gray-900">${{ number_format($position->current_price, 4) }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-gray-500 font-medium mb-1">Investment</div>
+                                    <div class="text-sm font-mono font-semibold text-gray-900 bg-blue-100/50 px-2 py-1 rounded inline-block">
+                                        ${{ number_format($position->investment, 2) }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-gray-500 font-medium mb-1">Holding</div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-sm font-semibold text-gray-900">{{ $this->getFormattedHoldingTime($position->opened_at) }}</span>
+                                        <div class="w-2 h-2 {{ $holdingHours < 24 ? 'bg-green-500' : ($holdingHours < 72 ? 'bg-yellow-500' : 'bg-red-500') }} rounded-full"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- SL/TP Row -->
+                            <div class="mb-3">
+                                <div class="text-xs text-gray-500 font-medium mb-2">Stop Loss / Take Profit</div>
+                                <div class="flex space-x-4">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-arrow-down text-red-500 text-xs"></i>
+                                        <span class="text-sm font-mono font-semibold">${{ $position->stop_loss ? number_format($position->stop_loss, 4) : '--' }}</span>
+                                    </div>
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-arrow-up text-green-500 text-xs"></i>
+                                        <span class="text-sm font-mono font-semibold">${{ $position->take_profit ? number_format($position->take_profit, 4) : '--' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Action Button -->
+                            <div class="flex justify-end">
+                                <button 
+                                    wire:click="closePosition({{ $position->id }})"
+                                    wire:confirm="Are you sure you want to close this {{ $position->position_type }} position for {{ $position->symbol }}?"
+                                    class="px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-sm rounded-lg transition-all duration-300 font-semibold shadow-md hover:shadow-lg flex items-center space-x-2"
+                                    title="Close Position">
+                                    <i class="fas fa-times"></i>
+                                    <span>Close Position</span>
+                                </button>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
             @else
-                <div class="text-center py-16">
-                    <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tl from-purple-600/20 to-pink-500/20 rounded-full mb-6">
-                        <i class="fas fa-chart-line text-3xl text-gray-400"></i>
+                <!-- No positions message -->
+                <div class="text-center py-12 px-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tl from-purple-600/20 to-pink-500/20 rounded-full mb-4 sm:mb-6">
+                        <i class="fas fa-chart-line text-2xl sm:text-3xl text-gray-400"></i>
                     </div>
-                    <p class="text-gray-500 text-base font-semibold mb-2">No open positions available.</p>
-                    <p class="text-gray-400 text-xs mb-6">When AI makes trading decisions, positions will appear here.</p>
+                    <p class="text-gray-500 text-sm sm:text-base font-semibold mb-2">No open positions available.</p>
+                    <p class="text-gray-400 text-xs mb-4 sm:mb-6">When AI makes trading decisions, positions will appear here.</p>
                     @if(!$portfolio->ai_trade_enabled)
-                        <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4 inline-flex items-center space-x-3">
-                            <i class="fas fa-exclamation-triangle text-orange-500 text-base"></i>
-                            <p class="text-orange-700 text-xs font-semibold">Enable AI Trading to start receiving positions</p>
+                        <div class="bg-orange-50 border border-orange-200 rounded-2xl p-3 sm:p-4 inline-flex items-center space-x-3 max-w-xs mx-auto">
+                            <i class="fas fa-exclamation-triangle text-orange-500 text-sm sm:text-base"></i>
+                            <p class="text-orange-700 text-xs sm:text-sm font-semibold">Enable AI Trading to start receiving positions</p>
                         </div>
                     @endif
                 </div>
             @endif
         </div>
+
+        <style>
+            /* Custom scrollbar for table */
+            .overflow-x-auto::-webkit-scrollbar {
+                height: 6px;
+            }
+            
+            .overflow-x-auto::-webkit-scrollbar-track {
+                background: #f1f1f1;
+                border-radius: 3px;
+            }
+            
+            .overflow-x-auto::-webkit-scrollbar-thumb {
+                background: #888;
+                border-radius: 3px;
+            }
+            
+            .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+                background: #555;
+            }
+        </style>
         <!-- Recent Activity Section -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             <!-- Recent Trades - Top 10 -->

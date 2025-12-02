@@ -32,7 +32,7 @@ class SignalScannerService
             ->where('smart_confidence', '>', 60)
             ->orderBy('smart_confidence', 'desc')
             ->orderBy('enhanced_score', 'desc')
-            ->limit(25) // Ambil 20 terbaik saja
+            ->limit(10) // Ambil 20 terbaik saja
             ->get();
 
         Log::info("🎯 Found {$highConfidenceSignals->count()} high confidence signals");
