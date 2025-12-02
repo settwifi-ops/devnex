@@ -9,7 +9,6 @@ use App\Services\BinanceAccountService;
 use App\Services\RealTradingExecutionService;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-use App\Services\RealTradingExecutionService;
 use App\Services\Cache\TradingCacheService;
 
 class RealTradingPage extends Component
