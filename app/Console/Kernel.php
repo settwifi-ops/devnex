@@ -37,14 +37,14 @@ class Kernel extends ConsoleKernel
         
         // Auto-close positions - setiap menit
         $schedule->command('trading:auto-close-positions')
-                 ->everyMinute()
+                 ->everyFiveMinutes()
                  ->name('auto-close-positions')
                  ->withoutOverlapping(70)
                  ->runInBackground();
         
         // Update floating PnL - setiap menit
         $schedule->command('trading:update-floating-pnl')
-                 ->everyMinute()
+                 ->everyFiveMinutes()
                  ->name('update-floating-pnl')
                  ->withoutOverlapping(70)
                  ->runInBackground();
