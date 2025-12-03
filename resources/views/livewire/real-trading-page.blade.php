@@ -1,46 +1,38 @@
 <!-- resources/views/livewire/real-trading-page.blade.php -->
-<div class="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8"
-     x-data="tradingDashboard()"
-     x-init="init()">
+<div class="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
     <div class="container mx-auto px-4 max-w-6xl">
         
-        <!-- Header dengan Cache Status -->
+        <!-- Header -->
         <div class="text-center mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Real Trading</h1>
             <p class="text-gray-600 mt-2">Live trading with your Binance account</p>
             
-            <!-- Cache Status Indicator -->
-            <div class="mt-2 inline-flex items-center space-x-2">
-                @if($fromCache)
-                <span class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                    <i class="fas fa-database mr-1"></i>
-                    Cached Data
-                </span>
-                @endif
-                @if($loading)
-                <span class="inline-flex items-center px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
-                    <i class="fas fa-spinner fa-spin mr-1"></i>
-                    Loading...
-                </span>
-                @endif
-            </div>
+            @if(config('app.debug') && $fromCache)
+                <div class="inline-flex items-center mt-2 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
+                    <i class="fas fa-database mr-2"></i>
+                    <span>Data from cache</span>
+                    @if($lastCacheUpdate)
+                        <span class="ml-2 text-xs">(Updated: {{ $lastCacheUpdate }})</span>
+                    @endif
+                </div>
+            @endif
         </div>
 
         <!-- Flash Messages -->
         @if (session()->has('message'))
-            <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl mb-6 animate-fade-in">
+            <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl mb-6">
                 {{ session('message') }}
             </div>
         @endif
 
         @if (session()->has('error'))
-            <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl mb-6 animate-fade-in">
+            <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl mb-6">
                 {{ session('error') }}
             </div>
         @endif
 
         @if (session()->has('info'))
-            <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl mb-6 animate-fade-in">
+            <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl mb-6">
                 {{ session('info') }}
             </div>
         @endif
@@ -48,7 +40,7 @@
         <!-- Conditional Content -->
         @if(!$hasRealSubscription)
             <!-- UPGRADE CARD -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-6 animate-slide-up">
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-6">
                 <div class="text-center">
                     <div class="inline-block bg-orange-100 text-orange-800 px-4 py-1 rounded-full text-sm font-semibold mb-4">
                         PREMIUM ADD-ON
@@ -95,7 +87,7 @@
 
         @elseif(!$binanceConnected)
             <!-- API CONNECTION CARD -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 animate-slide-up">
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
                 <div class="text-center mb-6">
                     <div class="inline-block bg-green-100 text-green-800 px-4 py-1 rounded-full text-sm font-semibold mb-4">
                         REAL TRADING ACTIVE
@@ -225,50 +217,27 @@
 
         @else
             <!-- REAL TRADING DASHBOARD -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 animate-slide-up">
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
                 
-                <!-- Header dengan Cache & Account Management -->
+                <!-- Header dengan Account Management -->
                 <div class="text-center mb-8">
                     <div class="inline-flex items-center space-x-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-semibold mb-4">
                         <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                         <span>BINANCE CONNECTED • {{ $isTestnet ? 'TESTNET' : 'LIVE TRADING' }}</span>
-                        @if($fromCache)
-                        <span class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                            <i class="fas fa-database mr-1"></i>
-                            Cached
-                        </span>
-                        @endif
                     </div>
                     <h2 class="text-2xl font-bold text-gray-900 mb-2">Real Trading Dashboard</h2>
                     <p class="text-gray-600">
                         {{ $isTestnet ? 'Testing with fake money' : 'Live trading with real money' }}
                     </p>
                     
-                    <div class="flex items-center justify-center space-x-3 mt-4">
-                        <!-- Account Management Button -->
-                        <button 
-                            wire:click="toggleAccountManagement"
-                            class="inline-flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-xl transition-colors"
-                        >
-                            <i class="fas fa-cog"></i>
-                            <span>Manage API Keys</span>
-                        </button>
-                        
-                        <!-- Cache Refresh Button -->
-                        <button 
-                            wire:click="forceCacheRefresh"
-                            wire:loading.attr="disabled"
-                            class="inline-flex items-center space-x-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-xl transition-colors disabled:opacity-50"
-                            title="Force refresh cache data"
-                        >
-                            @if($loading)
-                                <i class="fas fa-spinner fa-spin"></i>
-                            @else
-                                <i class="fas fa-sync-alt"></i>
-                            @endif
-                            <span>Refresh Cache</span>
-                        </button>
-                    </div>
+                    <!-- Account Management Button -->
+                    <button 
+                        wire:click="toggleAccountManagement"
+                        class="mt-4 inline-flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-xl transition-colors"
+                    >
+                        <i class="fas fa-cog"></i>
+                        <span>Manage API Keys</span>
+                    </button>
                 </div>
 
                 <!-- Account Management Modal -->
@@ -300,7 +269,7 @@
                                                         {{ $account->is_testnet ? 'Testnet Account' : 'Live Trading Account' }}
                                                     </div>
                                                     <div class="text-sm text-gray-600">
-                                                        Connected: {{ $account->created_at->format('M d, Y') }}
+                                                        Connected: {{ $account->created_at ? $account->created_at->format('M d, Y') : 'N/A' }}
                                                     </div>
                                                     @if($account->balance_snapshot)
                                                     <div class="text-sm text-green-600 font-semibold">
@@ -397,7 +366,7 @@
                 </div>
                 @endif
 
-                <!-- Environment Warning dengan Cache Status -->
+                <!-- Environment Warning -->
                 <div class="mb-6 p-4 rounded-xl border 
                     @if($isTestnet) 
                         bg-yellow-50 border-yellow-200 
@@ -433,11 +402,20 @@
                         </div>
                     </div>
                     
-                    <!-- Cache Status -->
+                    <!-- Cache Indicator -->
                     @if($fromCache)
-                    <div class="mt-2 flex items-center text-xs text-blue-600">
-                        <i class="fas fa-database mr-1"></i>
-                        <span>Data loaded from cache • Last updated: {{ $lastCacheUpdate ?? 'Recently' }}</span>
+                    <div class="mt-3 pt-3 border-t border-yellow-300">
+                        <div class="flex items-center text-xs text-yellow-700">
+                            <i class="fas fa-database mr-2"></i>
+                            <span>Showing cached data (auto-refreshes every 30s)</span>
+                            <button 
+                                wire:click="loadBinancePositions"
+                                class="ml-auto text-yellow-600 hover:text-yellow-800 text-xs font-semibold"
+                            >
+                                <i class="fas fa-sync-alt mr-1"></i>
+                                Refresh Now
+                            </button>
+                        </div>
                     </div>
                     @endif
                 </div>
@@ -451,19 +429,14 @@
                         </div>
                         
                         <div class="flex items-center space-x-4">
-                            <!-- Balance Display dengan Cache Indicator -->
+                            <!-- Balance Display -->
                             <div class="text-right">
                                 <div class="text-2xl font-bold text-gray-900">${{ number_format($futuresBalance, 2) }}</div>
-                                <div class="text-sm {{ $futuresBalance >= $minBalanceRequired ? 'text-green-600' : 'text-red-600' }} font-semibold flex items-center justify-end">
+                                <div class="text-sm {{ $futuresBalance >= $minBalanceRequired ? 'text-green-600' : 'text-red-600' }} font-semibold">
                                     @if($futuresBalance >= $minBalanceRequired)
-                                        <i class="fas fa-check-circle mr-1"></i>
-                                        <span>✅ Sufficient</span>
+                                        ✅ Sufficient balance
                                     @else
-                                        <i class="fas fa-exclamation-triangle mr-1"></i>
-                                        <span>⚠️ Min: ${{ $minBalanceRequired }}</span>
-                                    @endif
-                                    @if($fromCache)
-                                        <i class="fas fa-database ml-1 text-blue-500" title="Data from cache"></i>
+                                        ⚠️ Min: ${{ $minBalanceRequired }}
                                     @endif
                                 </div>
                             </div>
@@ -510,8 +483,8 @@
                     </div>
                 </div>
 
-                <!-- Action Buttons dengan Cache Optimization -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <!-- Action Buttons with Cache Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
                     <button 
                         wire:click="refreshBalanceWithCache"
                         wire:loading.attr="disabled"
@@ -523,9 +496,6 @@
                         @else
                             <i class="fas fa-sync-alt mr-2"></i>
                             <span>Refresh Balance</span>
-                        @endif
-                        @if($fromCache)
-                            <i class="fas fa-database text-blue-200 ml-1" title="Cache will be invalidated"></i>
                         @endif
                     </button>
                     
@@ -563,24 +533,39 @@
                         wire:loading.attr="disabled"
                         class="flex items-center justify-center space-x-2 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors disabled:opacity-50"
                     >
-                        <i class="fas fa-redo mr-2"></i>
-                        <span>Refresh All</span>
+                        @if($loading)
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            <span>Refreshing...</span>
+                        @else
+                            <i class="fas fa-redo mr-2"></i>
+                            <span>Refresh All</span>
+                        @endif
+                    </button>
+                    
+                    <button 
+                        wire:click="forceCacheRefresh"
+                        wire:loading.attr="disabled"
+                        class="flex items-center justify-center space-x-2 bg-yellow-500 hover:bg-yellow-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                        title="Force refresh cache data"
+                    >
+                        @if($loading)
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            <span>Clearing...</span>
+                        @else
+                            <i class="fas fa-broom mr-2"></i>
+                            <span>Clear Cache</span>
+                        @endif
                     </button>
                 </div>
 
-                <!-- Pending Orders Section dengan Auto-refresh -->
+                <!-- Pending Orders Section -->
                 @if($pendingOrdersCount > 0)
-                <div class="bg-white border border-orange-200 rounded-2xl p-6 mb-6"
-                     wire:poll.30s="loadPendingOrders"
-                     wire:poll.keep-alive>
+                <div class="bg-white border border-orange-200 rounded-2xl p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-900">
                             ⏳ Pending Orders ({{ $pendingOrdersCount }})
                         </h3>
                         <div class="flex items-center space-x-2">
-                            <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                Auto-refresh: 30s
-                            </span>
                             <button 
                                 wire:click="refreshPendingOrders"
                                 wire:loading.attr="disabled"
@@ -591,7 +576,7 @@
                                     Refreshing...
                                 @else
                                     <i class="fas fa-sync-alt mr-1"></i>
-                                    Refresh Now
+                                    Refresh Status
                                 @endif
                             </button>
                         </div>
@@ -601,23 +586,25 @@
                         @foreach($pendingOrders as $order)
                             @php
                                 $orderSummary = $this->getOrderSummary($order);
-                                $isFilled = isset($order['order_status']) && strtoupper($order['order_status']) === 'FILLED';
-                                $isExpired = $orderSummary['is_expired'];
                             @endphp
                             
-                            @if(!$isFilled)
-                            <div class="border border-orange-100 rounded-xl p-4 bg-orange-50 hover:bg-orange-100 transition-colors duration-200">
+                            @if(isset($order['status']) && !in_array(strtoupper($order['status']), ['FILLED', 'CANCELLED']))
+                            <div class="border border-orange-100 rounded-xl p-4 bg-orange-50">
                                 <div class="flex items-center justify-between">
                                     <div class="flex-1">
                                         <div class="flex items-center space-x-3 mb-2">
-                                            <span class="font-semibold text-gray-900 text-lg">{{ $order['symbol'] }}</span>
+                                            <span class="font-semibold text-gray-900 text-lg">{{ $order['symbol'] ?? 'N/A' }}</span>
+                                            @if(isset($order['side']))
                                             <span class="px-2 py-1 text-xs rounded-full 
                                                 {{ $order['side'] === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                                 {{ $order['side'] }}
                                             </span>
+                                            @endif
+                                            @if(isset($order['position_type']))
                                             <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
                                                 {{ $order['position_type'] }}
                                             </span>
+                                            @endif
                                             
                                             <!-- BINANCE STATUS BADGE -->
                                             @if(isset($order['order_status']) && $order['order_status'])
@@ -632,51 +619,63 @@
                                             @endif
                                             
                                             <!-- LOCAL STATUS BADGE -->
+                                            @if(isset($order['status']))
                                             <span class="px-2 py-1 text-xs rounded-full 
                                                 {{ strtoupper($order['status']) === 'PENDING' ? 'bg-orange-100 text-orange-800' : 
                                                    (strtoupper($order['status']) === 'PARTIALLY_FILLED' ? 'bg-yellow-100 text-yellow-800' : 
                                                    'bg-gray-100 text-gray-800') }}">
                                                 Local: {{ $order['status'] }}
                                             </span>
+                                            @endif
                                         </div>
                                         
                                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                            @if(isset($order['limit_price']))
                                             <div>
                                                 <span class="text-gray-600">Limit Price:</span>
                                                 <span class="font-semibold ml-2">${{ number_format($order['limit_price'], 4) }}</span>
                                             </div>
+                                            @endif
+                                            @if(isset($order['quantity']))
                                             <div>
                                                 <span class="text-gray-600">Quantity:</span>
                                                 <span class="font-semibold ml-2">{{ number_format($order['quantity'], 6) }}</span>
                                             </div>
+                                            @endif
+                                            @if(isset($order['limit_price']) && isset($order['quantity']))
                                             <div>
                                                 <span class="text-gray-600">Total Value:</span>
                                                 <span class="font-semibold ml-2">${{ number_format($order['limit_price'] * $order['quantity'], 2) }}</span>
                                             </div>
+                                            @endif
                                             <div>
                                                 <span class="text-gray-600">Expires:</span>
-                                                <span class="font-semibold {{ $orderSummary['is_expired'] ? 'text-red-600' : 'text-orange-600' }}">
-                                                    {{ $orderSummary['time_left'] }}
+                                                <span class="font-semibold {{ $orderSummary['is_expired'] ?? false ? 'text-red-600' : 'text-orange-600' }}">
+                                                    {{ $orderSummary['time_left'] ?? 'N/A' }}
                                                 </span>
                                             </div>
                                         </div>
                                         
                                         <div class="mt-2 flex items-center space-x-4 text-sm">
+                                            @if(isset($order['binance_order_id']))
                                             <div class="flex items-center space-x-2">
                                                 <span class="text-gray-600">Order ID:</span>
                                                 <span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
-                                                    {{ $order['binance_order_id'] ?? 'N/A' }}
+                                                    {{ $order['binance_order_id'] }}
                                                 </span>
                                             </div>
+                                            @endif
+                                            @if(isset($order['created_at']))
                                             <div class="flex items-center space-x-2">
                                                 <span class="text-gray-600">Placed:</span>
                                                 <span class="text-gray-500">
                                                     {{ \Carbon\Carbon::parse($order['created_at'])->format('H:i:s') }}
                                                 </span>
                                             </div>
+                                            @endif
                                         </div>
                                         
-                                        @if($order['notes'])
+                                        @if(isset($order['notes']) && $order['notes'])
                                         <div class="mt-2 p-2 bg-gray-50 rounded text-xs text-gray-600">
                                             <i class="fas fa-sticky-note mr-1"></i>
                                             {{ $order['notes'] }}
@@ -687,7 +686,7 @@
                                     <div class="flex flex-col space-y-2 ml-4">
                                         <!-- Check Status Button -->
                                         <button 
-                                            wire:click="checkOrderStatus({{ $order['id'] }})"
+                                            wire:click="checkOrderStatus({{ $order['id'] ?? 0 }})"
                                             class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                                             title="Check current status on Binance"
                                         >
@@ -696,12 +695,12 @@
                                         
                                         <!-- Cancel Button -->
                                         <button 
-                                            wire:click="confirmCancelOrder({{ $order['id'] }})"
+                                            wire:click="confirmCancelOrder({{ $order['id'] ?? 0 }})"
                                             wire:loading.attr="disabled"
                                             class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-                                            {{ $orderSummary['is_expired'] ? 'disabled' : '' }}
+                                            {{ ($orderSummary['is_expired'] ?? false) ? 'disabled' : '' }}
                                         >
-                                            @if($cancellingOrderId == $order['id'])
+                                            @if($cancellingOrderId == ($order['id'] ?? null))
                                                 <i class="fas fa-spinner fa-spin mr-1"></i>
                                                 Cancelling...
                                             @else
@@ -715,9 +714,9 @@
                         @endforeach
                     </div>
                     
-                    <div class="mt-4 text-center text-sm text-gray-500 flex items-center justify-center space-x-2">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Orders auto-cancel in 15 minutes • Auto-refresh every 30 seconds</span>
+                    <div class="mt-4 text-center text-sm text-gray-500">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Orders will auto-cancel in 15 minutes if not filled • Click "Refresh Status" to update
                     </div>
                 </div>
                 @else
@@ -737,10 +736,8 @@
                 </div>
                 @endif
 
-                <!-- Trading Positions dari Binance dengan Cache & Auto-refresh -->
-                <div class="bg-white border border-gray-200 rounded-2xl p-6 mb-6"
-                     wire:poll.45s="loadCachedPositionsFirst"
-                     wire:poll.keep-alive>
+                <!-- Trading Positions dari Binance -->
+                <div class="bg-white border border-gray-200 rounded-2xl p-6 mb-6">
                     <div class="flex items-center justify-between mb-6">
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900">
@@ -748,12 +745,6 @@
                                 @if($activePositionsCount > 0)
                                 <span class="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
                                     {{ $activePositionsCount }} Active
-                                </span>
-                                @endif
-                                @if($fromCache)
-                                <span class="ml-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                                    <i class="fas fa-database mr-1"></i>
-                                    Cached
                                 </span>
                                 @endif
                             </h3>
@@ -766,9 +757,6 @@
                         </div>
                         
                         <div class="flex items-center space-x-2">
-                            <div class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                Auto-refresh: 45s
-                            </div>
                             <button 
                                 wire:click="refreshPositions"
                                 wire:loading.attr="disabled"
@@ -776,16 +764,15 @@
                             >
                                 @if($loadingPositions)
                                     <i class="fas fa-spinner fa-spin"></i>
-                                    <span>Loading...</span>
                                 @else
                                     <i class="fas fa-sync-alt"></i>
-                                    <span>Refresh</span>
                                 @endif
+                                <span>Refresh</span>
                             </button>
                         </div>
                     </div>
 
-                    @if($activePositionsCount > 0 && !empty($binancePositions))
+                    @if($activePositionsCount > 0)
                         <!-- Positions Table -->
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -816,16 +803,19 @@
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     @foreach($binancePositions as $index => $position)
-                                    <tr class="hover:bg-gray-50 transition-colors duration-150">
+                                    @if(isset($position['symbol']) && isset($position['quantity']) && $position['quantity'] > 0)
+                                    <tr class="hover:bg-gray-50">
                                         <td class="px-4 py-3 whitespace-nowrap">
-                                            <div class="font-semibold text-gray-900">{{ $position['symbol'] ?? 'N/A' }}</div>
+                                            <div class="font-semibold text-gray-900">{{ $position['symbol'] }}</div>
                                             <div class="text-xs text-gray-500">{{ $position['position_type'] ?? 'N/A' }}</div>
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap">
+                                            @if(isset($position['side']))
                                             <span class="px-2 py-1 text-xs rounded-full 
-                                                {{ ($position['side'] ?? '') === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                {{ $position['side'] ?? 'N/A' }}
+                                                {{ $position['side'] === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                                {{ $position['side'] }}
                                             </span>
+                                            @endif
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap">
                                             <div class="text-sm">
@@ -838,30 +828,31 @@
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap">
                                             @php
-                                                $pnl = $position['unrealized_pnl'] ?? 0;
-                                                $pnlFormatted = $this->formatPnl($pnl);
-                                                $pnlPercentage = $position['pnl_percentage'] ?? 0;
+                                                $pnlFormatted = $this->formatPnl($position['unrealized_pnl'] ?? 0);
+                                                $pnlPercentageFormatted = number_format(abs($position['pnl_percentage'] ?? 0), 2) . '%';
                                             @endphp
-                                            <div class="text-sm font-semibold {{ $pnlFormatted['color'] }}">
-                                                {{ $pnlFormatted['formatted'] }}
+                                            <div class="text-sm font-semibold {{ $pnlFormatted['color'] ?? 'text-gray-600' }}">
+                                                {{ $pnlFormatted['formatted'] ?? '$0.00' }}
                                             </div>
-                                            <div class="text-xs {{ $pnlFormatted['color'] }}">
-                                                {{ $pnl >= 0 ? '+' : '' }}{{ number_format(abs($pnlPercentage), 2) }}%
+                                            <div class="text-xs {{ $pnlFormatted['color'] ?? 'text-gray-600' }}">
+                                                {{ $pnlFormatted['sign'] ?? '' }}{{ $pnlPercentageFormatted }}
                                             </div>
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap">
+                                            @if(isset($position['leverage']))
                                             <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                                                {{ $position['leverage'] ?? 1 }}x
+                                                {{ $position['leverage'] }}x
                                             </span>
+                                            @endif
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                                             <button 
                                                 wire:click="confirmClosePosition({{ $index }})"
                                                 wire:loading.attr="disabled"
                                                 class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-                                                {{ $closingPositionId === ($position['symbol'] ?? '') ? 'disabled' : '' }}
+                                                {{ $closingPositionId === $position['symbol'] ? 'disabled' : '' }}
                                             >
-                                                @if($closingPositionId === ($position['symbol'] ?? ''))
+                                                @if($closingPositionId === $position['symbol'])
                                                     <i class="fas fa-spinner fa-spin mr-1"></i>
                                                     Closing...
                                                 @else
@@ -871,12 +862,13 @@
                                             </button>
                                         </td>
                                     </tr>
+                                    @endif
                                     @endforeach
                                 </tbody>
                             </table>
                         </div>
                         
-                        <!-- Positions Summary dengan FIXED Total Exposure -->
+                        <!-- Positions Summary -->
                         <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="bg-gray-50 rounded-xl p-4">
                                 <div class="text-sm text-gray-600">Total Positions</div>
@@ -885,8 +877,14 @@
                             <div class="bg-gray-50 rounded-xl p-4">
                                 <div class="text-sm text-gray-600">Margin Type</div>
                                 <div class="text-lg font-bold">
-                                    @if(!empty($binancePositions))
-                                        {{ $binancePositions[0]['margin_type'] ?? 'isolated' }}
+                                    @php
+                                        $marginTypes = array_unique(array_column($binancePositions, 'margin_type'));
+                                        $marginTypes = array_filter($marginTypes);
+                                    @endphp
+                                    @if(count($marginTypes) > 1)
+                                        Mixed
+                                    @elseif(count($marginTypes) == 1)
+                                        {{ $marginTypes[0] }}
                                     @else
                                         N/A
                                     @endif
@@ -898,9 +896,9 @@
                                     @php
                                         $totalExposure = 0;
                                         foreach ($binancePositions as $position) {
-                                            $entry = $position['entry_price'] ?? 0;
-                                            $quantity = $position['quantity'] ?? 0;
-                                            $totalExposure += abs($entry * $quantity);
+                                            if (isset($position['entry_price']) && isset($position['quantity'])) {
+                                                $totalExposure += $position['entry_price'] * $position['quantity'];
+                                            }
                                         }
                                     @endphp
                                     ${{ number_format($totalExposure, 2) }}
@@ -1017,37 +1015,51 @@
                                 
                                 <div class="bg-red-50 border border-red-200 rounded-xl p-4">
                                     <div class="space-y-2">
+                                        @if(isset($positionToClose['symbol']))
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Symbol:</span>
-                                            <span class="font-semibold">{{ $positionToClose['symbol'] ?? 'N/A' }}</span>
+                                            <span class="font-semibold">{{ $positionToClose['symbol'] }}</span>
                                         </div>
+                                        @endif
+                                        @if(isset($positionToClose['side']))
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Side:</span>
-                                            <span class="font-semibold {{ ($positionToClose['side'] ?? '') === 'BUY' ? 'text-green-600' : 'text-red-600' }}">
-                                                {{ $positionToClose['side'] ?? 'N/A' }} ({{ $positionToClose['position_type'] ?? 'N/A' }})
+                                            <span class="font-semibold {{ $positionToClose['side'] === 'BUY' ? 'text-green-600' : 'text-red-600' }}">
+                                                {{ $positionToClose['side'] }} ({{ $positionToClose['position_type'] ?? 'N/A' }})
                                             </span>
                                         </div>
+                                        @endif
+                                        @if(isset($positionToClose['quantity']))
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Quantity:</span>
-                                            <span class="font-semibold">{{ number_format($positionToClose['quantity'] ?? 0, 6) }}</span>
+                                            <span class="font-semibold">{{ number_format($positionToClose['quantity'], 6) }}</span>
                                         </div>
+                                        @endif
+                                        @if(isset($positionToClose['entry_price']))
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Entry Price:</span>
-                                            <span class="font-semibold">${{ number_format($positionToClose['entry_price'] ?? 0, 4) }}</span>
+                                            <span class="font-semibold">${{ number_format($positionToClose['entry_price'], 4) }}</span>
                                         </div>
+                                        @endif
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Current P&L:</span>
                                             @php
-                                                $pnlFormatted = $this->formatPnl($positionToClose['unrealized_pnl'] ?? 0);
+                                                $pnl = $positionToClose['unrealized_pnl'] ?? 0;
+                                                $pnlFormatted = $this->formatPnl($pnl);
                                             @endphp
                                             <span class="font-semibold {{ $pnlFormatted['color'] }}">
-                                                {{ $pnlFormatted['formatted'] }} ({{ number_format(abs($positionToClose['pnl_percentage'] ?? 0), 2) }}%)
+                                                {{ $pnlFormatted['formatted'] }} 
+                                                @if(isset($positionToClose['pnl_percentage']))
+                                                ({{ number_format(abs($positionToClose['pnl_percentage']), 2) }}%)
+                                                @endif
                                             </span>
                                         </div>
+                                        @if(isset($positionToClose['leverage']))
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Leverage:</span>
-                                            <span class="font-semibold">{{ $positionToClose['leverage'] ?? 1 }}x</span>
+                                            <span class="font-semibold">{{ $positionToClose['leverage'] }}x</span>
                                         </div>
+                                        @endif
                                     </div>
                                 </div>
                                 
@@ -1071,7 +1083,7 @@
                                     wire:loading.attr="disabled"
                                     class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
                                 >
-                                    @if($closingPositionId === ($positionToClose['symbol'] ?? ''))
+                                    @if($closingPositionId === ($positionToClose['symbol'] ?? null))
                                         <i class="fas fa-spinner fa-spin mr-1"></i>
                                         Closing...
                                     @else
@@ -1084,19 +1096,14 @@
                 </div>
                 @endif
 
-                <!-- Real Trading Stats Grid dengan Cache Indicators -->
+                <!-- Real Trading Stats Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <!-- Real Balance Card -->
-                    <div class="bg-white border border-green-200 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow">
+                    <div class="bg-white border border-green-200 rounded-2xl p-4 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
                                 <div class="text-lg font-bold text-gray-900">${{ number_format($realBalance, 2) }}</div>
-                                <div class="text-xs font-semibold text-gray-600 flex items-center">
-                                    Real Balance
-                                    @if($fromCache)
-                                    <i class="fas fa-database ml-1 text-blue-500 text-xs" title="From cache"></i>
-                                    @endif
-                                </div>
+                                <div class="text-xs font-semibold text-gray-600">Real Balance</div>
                             </div>
                             <div class="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center">
                                 <i class="fas fa-wallet text-white text-sm"></i>
@@ -1105,18 +1112,13 @@
                     </div>
 
                     <!-- Futures Balance Card -->
-                    <div class="bg-white border border-blue-200 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow">
+                    <div class="bg-white border border-blue-200 rounded-2xl p-4 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
                                 <div class="text-lg font-bold text-gray-900">
                                     ${{ number_format($futuresBalance, 2) }}
                                 </div>
-                                <div class="text-xs font-semibold text-gray-600 flex items-center">
-                                    Futures Balance
-                                    @if($fromCache)
-                                    <i class="fas fa-database ml-1 text-blue-500 text-xs" title="From cache"></i>
-                                    @endif
-                                </div>
+                                <div class="text-xs font-semibold text-gray-600">Futures Balance</div>
                             </div>
                             <div class="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center">
                                 <i class="fab fa-binance text-white text-sm"></i>
@@ -1125,7 +1127,7 @@
                     </div>
 
                     <!-- Real PnL Card -->
-                    <div class="bg-white border border-purple-200 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow">
+                    <div class="bg-white border border-purple-200 rounded-2xl p-4 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
                                 @php
@@ -1143,18 +1145,13 @@
                     </div>
 
                     <!-- Unrealized PnL Card -->
-                    <div class="bg-white border border-orange-200 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow">
+                    <div class="bg-white border border-orange-200 rounded-2xl p-4 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
                                 <div class="text-lg font-bold {{ $totalUnrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600' }}">
                                     {{ $totalUnrealizedPnl >= 0 ? '+' : '' }}${{ number_format($totalUnrealizedPnl, 2) }}
                                 </div>
-                                <div class="text-xs font-semibold text-gray-600 flex items-center">
-                                    Unrealized P&L
-                                    @if($fromCache)
-                                    <i class="fas fa-database ml-1 text-blue-500 text-xs" title="From cache"></i>
-                                    @endif
-                                </div>
+                                <div class="text-xs font-semibold text-gray-600">Unrealized P&L</div>
                             </div>
                             <div class="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center">
                                 <i class="fas fa-chart-line text-white text-sm"></i>
@@ -1163,30 +1160,27 @@
                     </div>
                 </div>
 
-                <!-- Cache Statistics (Debug Mode) -->
+                <!-- Cache Stats (Debug Mode) -->
                 @if(config('app.debug') && !empty($cacheStats))
-                <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-                    <h4 class="text-sm font-semibold text-gray-700 mb-2">Cache Statistics</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                        <div>
-                            <span class="text-gray-600">Hits:</span>
-                            <span class="font-semibold ml-1">{{ $cacheStats['hits'] ?? 0 }}</span>
+                <div class="mt-6 p-4 bg-gray-100 rounded-xl">
+                    <h4 class="font-semibold text-gray-700 mb-2">Cache Statistics</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        <div class="bg-white p-2 rounded">
+                            <div class="text-gray-600">Hits</div>
+                            <div class="font-bold">{{ $cacheStats['hits'] ?? 0 }}</div>
                         </div>
-                        <div>
-                            <span class="text-gray-600">Misses:</span>
-                            <span class="font-semibold ml-1">{{ $cacheStats['misses'] ?? 0 }}</span>
+                        <div class="bg-white p-2 rounded">
+                            <div class="text-gray-600">Misses</div>
+                            <div class="font-bold">{{ $cacheStats['misses'] ?? 0 }}</div>
                         </div>
-                        <div>
-                            <span class="text-gray-600">Keys:</span>
-                            <span class="font-semibold ml-1">{{ $cacheStats['keys'] ?? 0 }}</span>
+                        <div class="bg-white p-2 rounded">
+                            <div class="text-gray-600">Keys</div>
+                            <div class="font-bold">{{ $cacheStats['keys'] ?? 0 }}</div>
                         </div>
-                        <div>
-                            <span class="text-gray-600">Memory:</span>
-                            <span class="font-semibold ml-1">{{ $cacheStats['memory'] ?? 'N/A' }}</span>
+                        <div class="bg-white p-2 rounded">
+                            <div class="text-gray-600">Memory</div>
+                            <div class="font-bold">{{ $cacheStats['memory'] ?? '0 MB' }}</div>
                         </div>
-                    </div>
-                    <div class="mt-2 text-xs text-gray-500">
-                        Last cache update: {{ $lastCacheUpdate ?? 'Never' }}
                     </div>
                 </div>
                 @endif
@@ -1196,146 +1190,24 @@
 
     </div>
 
-    <!-- JavaScript untuk auto-refresh dan cache management -->
+    <!-- JavaScript untuk auto-refresh dan events -->
+    @script
     <script>
-    function tradingDashboard() {
-        return {
-            // State
-            autoRefresh: true,
-            refreshInterval: null,
+        $wire.on('binance-connected', () => {
+            console.log('🔧 Binance connected event received');
             
-            // Initialize
-            init() {
-                this.setupAutoRefresh();
-                this.setupEventListeners();
-            },
-            
-            // Setup auto-refresh
-            setupAutoRefresh() {
-                // Auto-refresh positions setiap 45 detik
-                this.refreshInterval = setInterval(() => {
-                    if (@this.binanceConnected && this.autoRefresh) {
-                        @this.call('loadCachedPositionsFirst');
-                    }
-                }, 45000);
-                
-                // Auto-refresh orders setiap 30 detik
-                setInterval(() => {
-                    if (@this.binanceConnected && this.autoRefresh) {
-                        @this.call('loadPendingOrders');
-                    }
-                }, 30000);
-            },
-            
-            // Setup event listeners
-            setupEventListeners() {
-                @this.on('binance-connected', () => {
-                    console.log('🔧 Binance connected event received');
-                    
-                    // Show success notification
-                    this.showNotification('Binance Connected', 'Your account has been successfully connected!');
-                    
-                    // Refresh data setelah 1 detik
-                    setTimeout(() => {
-                        @this.call('refreshData');
-                    }, 1000);
-                });
-                
-                @this.on('cache-updated', () => {
-                    this.showNotification('Cache Updated', 'Trading data cache has been refreshed');
-                });
-            },
-            
-            // Show notification
-            showNotification(title, message) {
-                // Create notification element
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg animate-slide-up';
-                notification.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <i class="fas fa-check-circle"></i>
-                            <span class="font-semibold">${title}</span>
-                        </div>
-                    </div>
-                    <p class="text-sm mt-1 opacity-90">${message}</p>
-                `;
-                
-                document.body.appendChild(notification);
-                
-                // Remove after 5 seconds
-                setTimeout(() => {
-                    notification.remove();
-                }, 5000);
-            },
-            
-            // Toggle auto-refresh
-            toggleAutoRefresh() {
-                this.autoRefresh = !this.autoRefresh;
-                
-                if (this.autoRefresh) {
-                    this.setupAutoRefresh();
-                    this.showNotification('Auto-refresh Enabled', 'Data will auto-refresh every 45 seconds');
-                } else {
-                    clearInterval(this.refreshInterval);
-                    this.showNotification('Auto-refresh Disabled', 'Manual refresh required');
-                }
-                
-                // Save preference
-                localStorage.setItem('tradingAutoRefresh', this.autoRefresh);
-            }
-        };
-    }
-    
-    // Initialize when Livewire is loaded
-    document.addEventListener('livewire:initialized', () => {
-        // Load auto-refresh preference
-        const savedPreference = localStorage.getItem('tradingAutoRefresh');
-        if (savedPreference !== null) {
-            const dashboard = document.querySelector('[x-data="tradingDashboard()"]').__x.$data;
-            dashboard.autoRefresh = savedPreference === 'true';
-        }
-        
-        // Setup polling
-        @this.on('polling-started', () => {
-            console.log('🔄 Polling started');
+            // Show success toast
+            setTimeout(() => {
+                $wire.refreshData();
+            }, 1000);
         });
-    });
+        
+        // Auto-refresh positions setiap 30 detik jika Binance connected
+        setInterval(() => {
+            if (@this.binanceConnected && @this.realTradingEnabled) {
+                $wire.loadBinancePositions();
+            }
+        }, 30000);
     </script>
-
-    <!-- CSS Animations -->
-    <style>
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-    
-    @keyframes slideUp {
-        from { 
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to { 
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    
-    .animate-fade-in {
-        animation: fadeIn 0.5s ease-in-out;
-    }
-    
-    .animate-slide-up {
-        animation: slideUp 0.3s ease-out;
-    }
-    
-    .animate-pulse {
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-    </style>
+    @endscript
 </div>

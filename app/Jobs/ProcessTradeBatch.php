@@ -258,7 +258,7 @@ class ProcessTradeBatch implements ShouldQueue
                 'ai_decision_id' => $decision->id,
                 'symbol' => $decision->symbol,
                 'binance_order_id' => $mainOrderId,
-                'stop_loss_order_id' => $stopLossOrderId,
+                'sl_order_id' => $stopLossOrderId,
                 'take_profit_order_id' => $takeProfitOrderId,
                 'limit_price' => $limitPrice,
                 'stop_loss_price' => $stopLossPrice,

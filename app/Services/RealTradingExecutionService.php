@@ -397,7 +397,7 @@ class RealTradingExecutionService
                 'amount' => $positionSize['amount'],
                 'stop_loss' => $stopLossPrice,
                 'take_profit' => $takeProfitPrice,
-                'stop_loss_order_id' => $stopLossOrderId,
+                'sl_order_id' => $stopLossOrderId,
                 'take_profit_order_id' => $takeProfitOrderId
             ];
             
@@ -626,7 +626,7 @@ class RealTradingExecutionService
             'ai_decision_id' => $decision->id,
             'symbol' => $decision->symbol,
             'binance_order_id' => $mainOrderId,
-            'stop_loss_order_id' => $stopLossOrderId,
+            'sl_order_id' => $stopLossOrderId,
             'take_profit_order_id' => $takeProfitOrderId,
             'limit_price' => $decision->price,
             'stop_loss_price' => $stopLossPrice,
@@ -724,9 +724,9 @@ class RealTradingExecutionService
             }
             
             // Cancel stop loss order
-            if ($order->stop_loss_order_id) {
+            if ($order->sl_order_id) {
                 try {
-                    $binance->futuresCancel($order->symbol, $order->stop_loss_order_id);
+                    $binance->futuresCancel($order->symbol, $order->sl_order_id);
                     $cancelled[] = 'stop_loss';
                 } catch (\Exception $e) {
                     // Order mungkin sudah triggered
@@ -780,7 +780,7 @@ class RealTradingExecutionService
         
         try {
             $query = PendingOrder::where('status', 'FILLED')
-                ->whereNull('stop_loss_order_id')
+                ->whereNull('sl_order_id')
                 ->whereNotNull('binance_order_id');
             
             if ($userId) {
@@ -848,7 +848,7 @@ class RealTradingExecutionService
             
             // Update order
             $order->update([
-                'stop_loss_order_id' => $stopLossOrder['orderId'],
+                'sl_order_id' => $stopLossOrder['orderId'],
                 'stop_loss_price' => $stopLossPrice,
                 'notes' => $order->notes . " | Stop loss added post-fill"
             ]);
