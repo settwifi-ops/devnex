@@ -304,9 +304,6 @@ class AITradingService
             $response['warning_message'] = "⚠️ Market health below average ({$marketHealth}/100)";
         }
         
-        return $response;
-    }
-
         // ✅ UPDATE: Adjust confidence requirements untuk threshold 50
         $adjustedMinConfidence = $this->minConfidenceThreshold;
         
@@ -359,7 +356,7 @@ class AITradingService
         }
 
         return ['valid' => true, 'reason' => "Market context validation passed"];
-    }
+    } // <-- TAMBAHKAN KURUNG PENUTUP DI SINI
 
     /**
      * Save and execute decision
