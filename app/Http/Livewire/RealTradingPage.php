@@ -333,14 +333,14 @@ class RealTradingPage extends Component
                           ->orWhere(function($q) {
                               $q->where('status', 'FILLED')
                                 ->where(function($sq) {
-                                    $sq->whereNull('order_status')
-                                       ->orWhereNotIn('order_status', ['FILLED', 'CANCELLED']);
+                                    $sq->whereNull('status')
+                                       ->orWhereNotIn('status', ['FILLED', 'CANCELLED']);
                                 });
                           });
                 })
                 ->where(function($query) {
-                    $query->whereNull('order_status')
-                          ->orWhereNotIn('order_status', ['FILLED', 'CANCELLED']);
+                    $query->whereNull('status')
+                          ->orWhereNotIn('status', ['FILLED', 'CANCELLED']);
                 })
                 ->with('aiDecision')
                 ->orderBy('created_at', 'desc')
@@ -354,7 +354,7 @@ class RealTradingPage extends Component
                         'limit_price' => $order->limit_price,
                         'quantity' => $order->quantity,
                         'status' => $order->status,
-                        'order_status' => $order->order_status,
+                        'status' => $order->status,
                         'executed_qty' => $order->executed_qty,
                         'avg_price' => $order->avg_price,
                         'binance_order_id' => $order->binance_order_id,
@@ -702,7 +702,7 @@ class RealTradingPage extends Component
                     
                     // Update status lokal
                     $order->update([
-                        'order_status' => $orderStatus,
+                        'status' => $orderStatus,
                         'executed_qty' => $executedQty,
                         'avg_price' => $avgPrice,
                         'last_checked' => now()
@@ -908,7 +908,7 @@ class RealTradingPage extends Component
             
             // Update local status
             $order->update([
-                'order_status' => $orderStatus['status'] ?? 'UNKNOWN',
+                'status' => $orderStatus['status'] ?? 'UNKNOWN',
                 'executed_qty' => $orderStatus['executedQty'] ?? 0,
                 'avg_price' => $orderStatus['avgPrice'] ?? 0,
                 'last_checked' => now()
@@ -1058,7 +1058,7 @@ class RealTradingPage extends Component
             'time_left' => $timeLeftText,
             'is_expired' => $isExpired,
             'badge_color' => $this->getStatusBadgeColor($order['status']),
-            'order_status_color' => $this->getOrderStatusBadgeColor($order['order_status'] ?? '')
+            'order_status_color' => $this->getOrderStatusBadgeColor($order['status'] ?? '')
         ];
     }
 
