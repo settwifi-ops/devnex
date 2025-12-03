@@ -302,7 +302,7 @@ class BinanceAccountService
             // Untuk LIBRARY JAGGEDSOFT
             $binance = new \Binance\API($apiKey, $apiSecret, [
                 'useServerTime' => true,
-                'testnet' => $account->is_testnet
+                'useTestnet' => $account->is_testnet
             ]);
             
             // Test connection dengan method yang tersedia
