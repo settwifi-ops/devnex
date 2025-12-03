@@ -637,7 +637,6 @@ class RealTradingExecutionService
             'amount' => $positionSize['amount'],
             'expires_at' => now()->addMinutes($this->orderExpiryMinutes),
             'status' => 'PENDING',
-            'status' => 'NEW',
             'notes' => "Risk: {$positionSize['risk_percentage']}%, SL: {$this->stopLossPercentage}%, TP: {$this->takeProfitPercentage}%"
         ]);
     }
