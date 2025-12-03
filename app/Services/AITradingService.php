@@ -246,31 +246,66 @@ class AITradingService
 
     /**
      * ✅ ENHANCED: Validate decision dengan volume context - FIXED FOR BEARISH MARKET
+     * Returns: ['valid' => boolean, 'reason' => string, 'warning' => boolean]
      */
     private function validateDecisionWithVolumeContext($decision)
     {
         $marketSummary = RegimeSummary::today()->first();
         
         if (!$marketSummary) {
-            return ['valid' => true, 'reason' => 'No market summary available'];
+            return [
+                'valid' => true, 
+                'reason' => 'No market summary available',
+                'warning' => false
+            ];
         }
 
         $action = $decision['action'];
         $marketSentiment = $marketSummary->market_sentiment;
         $marketHealth = $marketSummary->market_health_score;
+        
+        // Default response
+        $response = [
+            'valid' => true,
+            'reason' => 'Validation passed',
+            'warning' => false
+        ];
 
-        // ✅ FIXED: Jangan block SELL di poor market health jika market bearish
+        // ✅ CRITICAL FIX: Never block analysis, only provide warnings
         if ($marketHealth < 25) {
-            // Allow SELL actions in bearish market even with poor health
+            // Kasus 1: SELL di market bearish - diperbolehkan dengan warning
             if ($action === 'SELL' && ($marketSentiment === 'bearish' || $marketSentiment === 'extremely_bearish')) {
                 Log::info("🎯 Allowing SELL in poor market health ({$marketHealth}) - Bearish market context");
-                // Continue dengan confidence check biasa
+                $response['valid'] = true;
+                $response['reason'] = "SELL allowed in bearish market despite poor health";
+                $response['warning'] = true;
+                $response['warning_message'] = "⚠️ Market health very low ({$marketHealth}/100) - Proceed with caution";
             } 
-            // Block BUY dan non-aligned actions di poor market
+            // Kasus 2: BUY/HOLD di market bearish - warning saja, jangan block
             else if ($action === 'BUY' || $action === 'HOLD') {
-                return ['valid' => false, 'reason' => "Very poor market health: {$marketHealth}/100 - Blocking BUY/HOLD"];
+                Log::warning("⚠️ Warning: BUY/HOLD action in poor market health ({$marketHealth})");
+                $response['valid'] = true; // JANGAN block, biarkan AI menganalisis
+                $response['reason'] = "Analysis allowed with warning";
+                $response['warning'] = true;
+                $response['warning_message'] = "⚠️ Market health very low ({$marketHealth}/100) - Consider SELL instead";
+            }
+            // Kasus 3: SELL di market non-bearish - warning saja
+            else if ($action === 'SELL') {
+                Log::warning("⚠️ Warning: SELL action in poor market health ({$marketHealth}) but market not bearish");
+                $response['valid'] = true; // JANGAN block
+                $response['reason'] = "SELL analysis allowed with warning";
+                $response['warning'] = true;
+                $response['warning_message'] = "⚠️ Market health low but sentiment not bearish - Verify SELL signal";
             }
         }
+        // Market health sedang (25-50) - warning ringan
+        else if ($marketHealth < 50) {
+            $response['warning'] = true;
+            $response['warning_message'] = "⚠️ Market health below average ({$marketHealth}/100)";
+        }
+        
+        return $response;
+    }
 
         // ✅ UPDATE: Adjust confidence requirements untuk threshold 50
         $adjustedMinConfidence = $this->minConfidenceThreshold;
