@@ -440,6 +440,7 @@ class ProcessTradeBatch implements ShouldQueue
                         'limit_price' => $order->limit_price,
                         'quantity' => $order->quantity,
                         'status' => $order->status,
+                        'status' => $order->status,
                         'created_at' => $order->created_at->timestamp,
                         'expires_at' => $order->expires_at ? $order->expires_at->timestamp : null
                     ];
