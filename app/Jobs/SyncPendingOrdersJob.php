@@ -107,10 +107,7 @@ class SyncPendingOrdersJob implements ShouldQueue
             }
             
             // Get order status from Binance
-            $binanceStatus = $binance->futuresGetOrder([
-                'symbol' => $order->symbol,
-                'orderId' => $order->binance_order_id
-            ]);
+            $binanceStatus = $binance->futures_order_status($pendingOrder->symbol, $pendingOrder->binance_order_id);
             
             $orderStatus = $binanceStatus['status'] ?? 'UNKNOWN';
             $executedQty = (float) ($binanceStatus['executedQty'] ?? 0);
