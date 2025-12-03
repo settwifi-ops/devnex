@@ -110,7 +110,7 @@ class RealTradingPage extends Component
     /**
      * ✅ NEW METHOD: Load positions dari cache dulu, jika tidak ada baru dari Binance
      */
-    private function loadCachedPositionsFirst()
+    public function loadCachedPositionsFirst()
     {
         try {
             // Cek cache dulu
@@ -547,7 +547,7 @@ class RealTradingPage extends Component
                 }
                 
                 // Skip jika amount 0
-                if ($positionAmt == 0) continue;
+                if (abs($positionAmt) < 0.000001) continue; // Lebih fleksibel
                 
                 $symbol = $position['symbol'] ?? '';
                 if (empty($symbol)) continue;
