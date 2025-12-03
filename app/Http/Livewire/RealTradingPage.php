@@ -169,13 +169,13 @@ class RealTradingPage extends Component
     {
         try {
             $accounts = $this->user->binanceAccounts()
-                ->select(['is_testnet', 'is_active', 'is_verified', 'created_at'])
+                ->select(['is_testnet', 'is_active', 'verification_status', 'created_at'])
                 ->get();
             
             return [
                 'has_accounts' => $accounts->isNotEmpty(),
                 'active_accounts' => $accounts->where('is_active', true)->count(),
-                'verified_accounts' => $accounts->where('is_verified', true)->count(),
+                'verified_accounts' => $accounts->where('verification_status', true)->count(),
                 'testnet_accounts' => $accounts->where('is_testnet', true)->count(),
                 'mainnet_accounts' => $accounts->where('is_testnet', false)->count(),
                 'accounts' => $accounts

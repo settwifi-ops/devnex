@@ -118,7 +118,7 @@ class SyncPendingOrdersJob implements ShouldQueue
             
             // Update database
             $order->update([
-                'order_status' => $orderStatus,
+                'status' => $orderStatus,
                 'executed_qty' => $executedQty,
                 'avg_price' => $avgPrice,
                 'last_checked' => now()

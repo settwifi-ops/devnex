@@ -268,7 +268,7 @@ class ProcessTradeBatch implements ShouldQueue
                 'position_type' => $positionType,
                 'expires_at' => now()->addMinutes(15),
                 'status' => 'PENDING',
-                'order_status' => 'NEW',
+                'status' => 'NEW',
                 'notes' => "Limit order with SL: \${$stopLossPrice}, TP: \${$takeProfitPrice} (Batch Process)"
             ]);
             
@@ -441,7 +441,7 @@ class ProcessTradeBatch implements ShouldQueue
                         'limit_price' => $order->limit_price,
                         'quantity' => $order->quantity,
                         'status' => $order->status,
-                        'order_status' => $order->order_status,
+                        'status' => $order->status,
                         'created_at' => $order->created_at->timestamp,
                         'expires_at' => $order->expires_at ? $order->expires_at->timestamp : null
                     ];
