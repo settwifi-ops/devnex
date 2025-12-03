@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\RegimeSummary;     // ✅ TAMBAH BARIS INI
 use Carbon\Carbon;
 use App\Events\TradingExecutedEvent;
+use Illuminate\Contracts\Broadcasting\Factory as BroadcastFactory;
 
 class TradingExecutionService
 {
@@ -142,10 +143,10 @@ class TradingExecutionService
    
     private function notifyUserTradeExecution($userId, $symbol, $action, $message)
     {
-         // ✅ DEBUG: LOG SEBELUM EVENT
         Log::info("🔔 BEFORE EVENT - User: {$userId}, Symbol: {$symbol}, Action: {$action}");
+        
         try {
-            // Existing event
+            // Ini saja sudah cukup! Laravel akan broadcast otomatis
             event(new TradingExecutedEvent(
                 $userId,
                 "Trade Executed - {$symbol}",
@@ -159,36 +160,10 @@ class TradingExecutionService
                 ]
             ));
 
-            // ✅ TAMBAHKAN INI: Pusher real-time notification
-            $pusher = new \Pusher\Pusher(
-                env('PUSHER_APP_KEY'),
-                env('PUSHER_APP_SECRET'),
-                env('PUSHER_APP_ID'),
-                [
-                    'cluster' => env('PUSHER_APP_CLUSTER'),
-                    'useTLS' => true
-                ]
-            );
-
-            $notificationData = [
-                'id' => uniqid(),
-                'title' => "🎯 Trade Executed - {$symbol}",
-                'message' => $message,
-                'type' => strtolower($action),
-                'data' => [
-                    'symbol' => $symbol,
-                    'action' => $action,
-                    'type' => 'trade_execution',
-                    'timestamp' => now()->toISOString()
-                ],
-                'received_at' => now()->toISOString()
-            ];
-
-            $pusher->trigger("private-user-{$userId}", 'new.signal', $notificationData);
-            Log::info("📢 PUSHER NOTIFICATION: Trade execution sent to user {$userId}");
+            Log::info("📢 EVENT DISPATCHED: Trade execution sent to user {$userId}");
 
         } catch (\Exception $e) {
-            Log::error("❌ Pusher notification failed: " . $e->getMessage());
+            Log::error("❌ Notification failed: " . $e->getMessage());
         }
     }
 
