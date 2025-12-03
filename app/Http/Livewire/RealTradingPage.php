@@ -475,17 +475,25 @@ class RealTradingPage extends Component
             
             // ✅ JIKA BERHASIL DAPAT INSTANCE, LANJUT FETCH DATA
             $positionsData = [];
+            $fetchError = null;
             
-            // Coba futuresAccount() terlebih dahulu
+            // ✅ FIX: Coba futuresAccount() dengan error handling yang lebih baik
             if (method_exists($binance, 'futuresAccount')) {
                 try {
                     $accountInfo = $binance->futuresAccount();
                     
-                    if (isset($accountInfo['positions']) && is_array($accountInfo['positions'])) {
+                    // ✅ CEK JIKA RESPONSE ADALAH ERROR DARI BINANCE
+                    if (isset($accountInfo['code']) && isset($accountInfo['msg'])) {
+                        Log::error("❌ Binance API Error: {$accountInfo['code']} - {$accountInfo['msg']}");
+                        $fetchError = "Binance API Error: {$accountInfo['msg']} (Code: {$accountInfo['code']})";
+                    } 
+                    // ✅ RESPONSE VALID
+                    elseif (isset($accountInfo['positions']) && is_array($accountInfo['positions'])) {
                         $positionsData = $accountInfo['positions'];
                         Log::info("✅ Found positions in futuresAccount[positions]", ['count' => count($positionsData)]);
-                    } else {
-                        // Coba cari di seluruh array
+                    } 
+                    // ✅ COBA CARI POSITIONS DI STRUKTUR LAIN
+                    else {
                         foreach ($accountInfo as $key => $value) {
                             if (is_array($value) && count($value) > 0) {
                                 $firstItem = $value[0] ?? null;
@@ -497,34 +505,29 @@ class RealTradingPage extends Component
                             }
                         }
                     }
+                    
                 } catch (\Exception $e) {
-                    Log::warning("futuresAccount() error: " . $e->getMessage());
+                    $fetchError = $e->getMessage();
+                    Log::warning("⚠️ futuresAccount() failed: " . $fetchError);
+                    
+                    // ✅ CEK JIKA ERROR -2015 (INVALID PERMISSION)
+                    if (strpos($fetchError, '-2015') !== false || strpos($fetchError, 'Invalid API-key') !== false) {
+                        Log::error("❌ API KEY MISSING FUTURES PERMISSION (Code -2015)");
+                        // Cache empty positions dengan note permission error
+                        $this->tradingCache->cachePositions($this->user->id, [], 60); // 1 menit TTL
+                    }
                 }
             }
             
-            // Jika masih kosong, coba account() sebagai fallback
-            if (empty($positionsData) && method_exists($binance, 'account')) {
-                try {
-                    $accountInfo = $binance->account();
-                    
-                    if (isset($accountInfo['balances']) && is_array($accountInfo['balances'])) {
-                        // Convert balances to positions format
-                        foreach ($accountInfo['balances'] as $balance) {
-                            if (isset($balance['asset']) && (float) ($balance['free'] ?? 0) != 0) {
-                                $positionsData[] = [
-                                    'symbol' => $balance['asset'] . 'USDT',
-                                    'positionAmt' => (float) $balance['free'],
-                                    'entryPrice' => 0,
-                                    'markPrice' => 0,
-                                    'unRealizedProfit' => 0
-                                ];
-                            }
-                        }
-                        Log::info("✅ Converted balances to positions", ['count' => count($positionsData)]);
-                    }
-                } catch (\Exception $e) {
-                    Log::warning("account() error: " . $e->getMessage());
-                }
+            // ✅ FIX: HAPUS FALLBACK KE account() - TIDAK PERLU KARENA HANYA BUTUH FUTURES
+            // if (empty($positionsData) && method_exists($binance, 'account')) {
+            //    HAPUS BLOK INI SEPENUHNYA!
+            // }
+            
+            // ✅ JIKA TIDAK ADA DATA, LOG DAN LANJUT
+            if (empty($positionsData)) {
+                Log::info("ℹ️ No futures positions found for user {$this->user->id}. " . 
+                         ($fetchError ? "Error: {$fetchError}" : "User has no open positions."));
             }
             
             // Filter dan format positions
@@ -637,7 +640,8 @@ class RealTradingPage extends Component
                 'user_id' => $this->user->id,
                 'count' => $this->activePositionsCount,
                 'total_unrealized_pnl' => $totalUnrealizedPnl,
-                'cached' => true
+                'cached' => true,
+                'had_error' => !empty($fetchError)
             ]);
             
         } catch (\Exception $e) {
