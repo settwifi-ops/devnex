@@ -463,31 +463,28 @@ class RealTradingExecutionService
         $available = 0;
         
         try {
-            // Coba futures balance
-            if (method_exists($binance, 'futuresAccountBalance')) {
-                $futuresBalance = $binance->futuresAccountBalance();
+            // Menggunakan method yang benar untuk futures balance
+            if (method_exists($binance, 'futuresAccount')) {
+                $futuresAccount = $binance->futuresAccount();
                 
-                foreach ($futuresBalance as $asset) {
-                    if (isset($asset['asset']) && $asset['asset'] === 'USDT') {
-                        $total = (float) $asset['balance'];
-                        $available = (float) ($asset['availableBalance'] ?? 0);
-                        break;
+                if (isset($futuresAccount['assets'])) {
+                    foreach ($futuresAccount['assets'] as $asset) {
+                        if ($asset['asset'] === 'USDT') {
+                            $total = (float) $asset['walletBalance'];
+                            $available = (float) ($asset['availableBalance'] ?? 0);
+                            break;
+                        }
                     }
                 }
             }
             
-            // Jika futures balance 0, coba spot
-            if ($total <= 0 && method_exists($binance, 'account')) {
-                $accountInfo = $binance->account();
+            // Jika futures balance 0, coba spot (menggunakan method yang benar)
+            if ($total <= 0 && method_exists($binance, 'balance')) {
+                $spotBalance = $binance->balance();
                 
-                if (isset($accountInfo['balances'])) {
-                    foreach ($accountInfo['balances'] as $balance) {
-                        if ($balance['asset'] === 'USDT') {
-                            $total = (float) $balance['free'] + (float) $balance['locked'];
-                            $available = (float) $balance['free'];
-                            break;
-                        }
-                    }
+                if (isset($spotBalance['USDT'])) {
+                    $total = (float) $spotBalance['USDT']['available'];
+                    $available = (float) $spotBalance['USDT']['available'];
                 }
             }
             
@@ -526,24 +523,39 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place LIMIT order
+     * ✅ Place LIMIT order dengan method yang benar
      */
     private function placeLimitOrder($binance, string $symbol, string $positionType, float $quantity, float $price): array
     {
         try {
             $side = $positionType === 'LONG' ? 'BUY' : 'SELL';
             
-            $order = $binance->futuresOrder(
-                $side,
-                $symbol,
-                $quantity,
-                $price,
-                'LIMIT',
-                [
-                    'timeInForce' => 'GTC',
-                    'leverage' => $this->leverage
-                ]
-            );
+            // Gunakan method yang benar untuk futures order
+            if (method_exists($binance, 'futures_order')) {
+                $order = $binance->futures_order(
+                    $symbol,
+                    $side,
+                    'LIMIT',
+                    [
+                        'quantity' => $quantity,
+                        'price' => $price,
+                        'timeInForce' => 'GTC',
+                        'leverage' => $this->leverage
+                    ]
+                );
+            } else {
+                // Fallback untuk kompatibilitas
+                $order = $binance->futuresOrder(
+                    $symbol,
+                    $side,
+                    'LIMIT',
+                    [
+                        'quantity' => $quantity,
+                        'price' => $price,
+                        'timeInForce' => 'GTC'
+                    ]
+                );
+            }
             
             if (!isset($order['orderId'])) {
                 throw new \Exception("Limit order failed: " . json_encode($order));
@@ -565,25 +577,38 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place STOP LOSS order
+     * ✅ Place STOP LOSS order dengan method yang benar
      */
     private function placeStopLossOrder($binance, string $symbol, string $positionType, float $quantity, float $stopPrice): ?string
     {
         try {
             $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
             
-            $order = $binance->futuresOrder(
-                $side,
-                $symbol,
-                $quantity,
-                0, // Price 0 untuk STOP_MARKET
-                'STOP_MARKET',
-                [
-                    'stopPrice' => $stopPrice,
-                    'closePosition' => 'true',
-                    'reduceOnly' => 'true'
-                ]
-            );
+            if (method_exists($binance, 'futures_order')) {
+                $order = $binance->futures_order(
+                    $symbol,
+                    $side,
+                    'STOP_MARKET',
+                    [
+                        'quantity' => $quantity,
+                        'stopPrice' => $stopPrice,
+                        'closePosition' => 'true',
+                        'reduceOnly' => 'true'
+                    ]
+                );
+            } else {
+                // Fallback
+                $order = $binance->futuresOrder(
+                    $symbol,
+                    $side,
+                    'STOP_MARKET',
+                    [
+                        'quantity' => $quantity,
+                        'stopPrice' => $stopPrice,
+                        'closePosition' => 'true'
+                    ]
+                );
+            }
             
             return $order['orderId'] ?? null;
             
@@ -594,24 +619,38 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place TAKE PROFIT order
+     * ✅ Place TAKE PROFIT order dengan method yang benar
      */
     private function placeTakeProfitOrder($binance, string $symbol, string $positionType, float $quantity, float $takeProfitPrice): ?string
     {
         try {
             $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
             
-            $order = $binance->futuresOrder(
-                $side,
-                $symbol,
-                $quantity,
-                $takeProfitPrice,
-                'LIMIT',
-                [
-                    'timeInForce' => 'GTC',
-                    'reduceOnly' => 'true'
-                ]
-            );
+            if (method_exists($binance, 'futures_order')) {
+                $order = $binance->futures_order(
+                    $symbol,
+                    $side,
+                    'LIMIT',
+                    [
+                        'quantity' => $quantity,
+                        'price' => $takeProfitPrice,
+                        'timeInForce' => 'GTC',
+                        'reduceOnly' => 'true'
+                    ]
+                );
+            } else {
+                // Fallback
+                $order = $binance->futuresOrder(
+                    $symbol,
+                    $side,
+                    'LIMIT',
+                    [
+                        'quantity' => $quantity,
+                        'price' => $takeProfitPrice,
+                        'timeInForce' => 'GTC'
+                    ]
+                );
+            }
             
             return $order['orderId'] ?? null;
             
@@ -656,6 +695,7 @@ class RealTradingExecutionService
             'notes' => "Auto-cancels at {$expiresAt->format('H:i:s')} - All orders for this symbol will be cancelled"
         ]);
     }
+    
     /**
      * ✅ Update user trade cache setelah trade executed
      */
@@ -676,7 +716,6 @@ class RealTradingExecutionService
         }
     }
     
-
     /**
      * ✅ METHOD: Check pending orders yang expired (UPDATED)
      */
@@ -733,6 +772,7 @@ class RealTradingExecutionService
             return $results;
         }
     }
+    
     /**
      * ✅ Cancel expired order beserta SEMUA orders untuk symbol yang sama
      */
@@ -742,16 +782,15 @@ class RealTradingExecutionService
             $binance = $this->binanceAccountService->getBinanceInstance($order->user_id);
             $cancelledOrders = [];
             
-            // 1. Cancel ALL open orders untuk symbol ini (termasuk main, SL, TP)
+            // 1. Cancel ALL open orders untuk symbol ini
             try {
-                // Cancel semua orders untuk symbol ini
-                $cancelAllResponse = $binance->futuresCancelAll($order->symbol);
-                
-                Log::info("✅ Cancelled ALL orders for symbol {$order->symbol}", [
-                    'user_id' => $order->user_id,
-                    'symbol' => $order->symbol,
-                    'response' => $cancelAllResponse
-                ]);
+                // Menggunakan method yang benar untuk cancel all orders
+                if (method_exists($binance, 'futures_cancel_all_orders')) {
+                    $cancelAllResponse = $binance->futures_cancel_all_orders($order->symbol);
+                } else {
+                    // Fallback: cancel satu per satu
+                    $this->cancelIndividualOrders($binance, $order);
+                }
                 
                 $cancelledOrders[] = 'all_orders';
                 
@@ -759,37 +798,7 @@ class RealTradingExecutionService
                 Log::warning("Failed to cancel all orders for {$order->symbol}: " . $e->getMessage());
                 
                 // Fallback: Cancel orders satu per satu
-                $ordersToCancel = [];
-                
-                if ($order->binance_order_id) {
-                    $ordersToCancel[] = ['id' => $order->binance_order_id, 'type' => 'main'];
-                }
-                if ($order->sl_order_id) {
-                    $ordersToCancel[] = ['id' => $order->sl_order_id, 'type' => 'stop_loss'];
-                }
-                if ($order->take_profit_order_id) {
-                    $ordersToCancel[] = ['id' => $order->take_profit_order_id, 'type' => 'take_profit'];
-                }
-                
-                // Juga coba cancel orders lain yang mungkin ada
-                try {
-                    $openOrders = $binance->futuresOpenOrders($order->symbol);
-                    foreach ($openOrders as $openOrder) {
-                        $ordersToCancel[] = ['id' => $openOrder['orderId'], 'type' => 'other'];
-                    }
-                } catch (\Exception $openOrdersError) {
-                    // Ignore jika gagal fetch open orders
-                }
-                
-                // Cancel satu per satu
-                foreach ($ordersToCancel as $orderToCancel) {
-                    try {
-                        $binance->futuresCancel($order->symbol, $orderToCancel['id']);
-                        $cancelledOrders[] = $orderToCancel['type'];
-                    } catch (\Exception $cancelError) {
-                        // Order mungkin sudah filled atau cancelled
-                    }
-                }
+                $this->cancelIndividualOrders($binance, $order);
             }
             
             // 2. Update order status di database
@@ -823,7 +832,55 @@ class RealTradingExecutionService
             return false;
         }
     }
-
+    
+    /**
+     * ✅ Helper untuk cancel individual orders
+     */
+    private function cancelIndividualOrders($binance, PendingOrder $order): array
+    {
+        $cancelled = [];
+        
+        // Cancel orders berdasarkan ID yang diketahui
+        $ordersToCancel = [];
+        
+        if ($order->binance_order_id) {
+            $ordersToCancel[] = ['id' => $order->binance_order_id, 'type' => 'main'];
+        }
+        if ($order->sl_order_id) {
+            $ordersToCancel[] = ['id' => $order->sl_order_id, 'type' => 'stop_loss'];
+        }
+        if ($order->take_profit_order_id) {
+            $ordersToCancel[] = ['id' => $order->take_profit_order_id, 'type' => 'take_profit'];
+        }
+        
+        // Coba cancel open orders yang ada
+        try {
+            if (method_exists($binance, 'futures_open_orders')) {
+                $openOrders = $binance->futures_open_orders($order->symbol);
+                foreach ($openOrders as $openOrder) {
+                    $ordersToCancel[] = ['id' => $openOrder['orderId'], 'type' => 'other'];
+                }
+            }
+        } catch (\Exception $e) {
+            // Ignore jika gagal fetch open orders
+        }
+        
+        // Cancel satu per satu
+        foreach (array_unique($ordersToCancel, SORT_REGULAR) as $orderToCancel) {
+            try {
+                if (method_exists($binance, 'futures_cancel')) {
+                    $binance->futures_cancel($order->symbol, $orderToCancel['id']);
+                } else {
+                    $binance->futuresCancel($order->symbol, $orderToCancel['id']);
+                }
+                $cancelled[] = $orderToCancel['type'];
+            } catch (\Exception $cancelError) {
+                // Order mungkin sudah filled atau cancelled
+            }
+        }
+        
+        return $cancelled;
+    }
     
     /**
      * ✅ METHOD: Add stop loss to filled orders
@@ -888,19 +945,29 @@ class RealTradingExecutionService
             
             $stopLossSide = $order->side === 'BUY' ? 'SELL' : 'BUY';
             
-            // Place stop loss order
-            $stopLossOrder = $binance->futuresOrder(
-                $stopLossSide,
-                $order->symbol,
-                $order->quantity,
-                0, // Price 0 untuk STOP_MARKET
-                'STOP_MARKET',
-                [
-                    'stopPrice' => $stopLossPrice,
-                    'closePosition' => 'true',
-                    'reduceOnly' => 'true'
-                ]
-            );
+            // Place stop loss order dengan method yang benar
+            if (method_exists($binance, 'futures_order')) {
+                $stopLossOrder = $binance->futures_order(
+                    $order->symbol,
+                    $stopLossSide,
+                    'STOP_MARKET',
+                    [
+                        'stopPrice' => $stopLossPrice,
+                        'closePosition' => 'true',
+                        'reduceOnly' => 'true'
+                    ]
+                );
+            } else {
+                $stopLossOrder = $binance->futuresOrder(
+                    $order->symbol,
+                    $stopLossSide,
+                    'STOP_MARKET',
+                    [
+                        'stopPrice' => $stopLossPrice,
+                        'closePosition' => 'true'
+                    ]
+                );
+            }
             
             if (!isset($stopLossOrder['orderId'])) {
                 throw new \Exception("Stop loss order failed: " . json_encode($stopLossOrder));
@@ -949,7 +1016,7 @@ class RealTradingExecutionService
             // Cache statistics
             $stats['cache_stats'] = $this->tradingCache->getStats();
             
-            // Rate limit stats (contoh)
+            // Rate limit stats
             $stats['rate_limits'] = [
                 'max_trades_per_minute' => $this->maxTradesPerMinute,
                 'batch_size' => $this->batchSize,
@@ -999,15 +1066,19 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ HELPER: Set leverage
+     * ✅ HELPER: Set leverage dengan method yang benar
      */
     private function setLeverage($binance, $symbol, $leverage)
     {
         try {
+            // Method yang direkomendasikan untuk set leverage
             if (method_exists($binance, 'futures_change_leverage')) {
                 $binance->futures_change_leverage($symbol, $leverage);
-            } elseif (method_exists($binance, 'change_leverage')) {
-                $binance->change_leverage($symbol, $leverage);
+            } elseif (method_exists($binance, 'futuresChangeLeverage')) {
+                $binance->futuresChangeLeverage($symbol, $leverage);
+            } else {
+                // Method alternatif
+                $binance->futuresLeverage($symbol, $leverage);
             }
         } catch (\Exception $e) {
             Log::warning("Leverage setting failed: " . $e->getMessage());
@@ -1048,5 +1119,57 @@ class RealTradingExecutionService
     private function getPositionTypeFromAction($action): string
     {
         return $action === 'BUY' ? 'LONG' : 'SHORT';
+    }
+    
+    /**
+     * ✅ NEW METHOD: Check position status
+     */
+    public function checkPositionStatus(int $userId, string $symbol): array
+    {
+        try {
+            $binance = $this->binanceAccountService->getBinanceInstance($userId);
+            
+            // Get position information
+            if (method_exists($binance, 'futures_position')) {
+                $positions = $binance->futures_position();
+            } elseif (method_exists($binance, 'futuresAccount')) {
+                $account = $binance->futuresAccount();
+                $positions = $account['positions'] ?? [];
+            } else {
+                return ['success' => false, 'message' => 'Method not available'];
+            }
+            
+            // Find position for specific symbol
+            $position = null;
+            foreach ($positions as $pos) {
+                if ($pos['symbol'] === $symbol && (float)$pos['positionAmt'] != 0) {
+                    $position = $pos;
+                    break;
+                }
+            }
+            
+            if (!$position) {
+                return ['success' => true, 'message' => 'No active position found', 'has_position' => false];
+            }
+            
+            return [
+                'success' => true,
+                'has_position' => true,
+                'symbol' => $symbol,
+                'position_amt' => (float)$position['positionAmt'],
+                'entry_price' => (float)$position['entryPrice'],
+                'unrealized_pnl' => (float)$position['unRealizedProfit'],
+                'leverage' => (float)$position['leverage'],
+                'liquidation_price' => (float)$position['liquidationPrice'],
+                'margin_type' => $position['marginType'] ?? 'isolated'
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error("Position check failed for user {$userId}: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => 'Failed to check position: ' . $e->getMessage()
+            ];
+        }
     }
 }
