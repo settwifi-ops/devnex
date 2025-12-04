@@ -298,7 +298,7 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅✅✅ Execute trade dengan Stop Loss & Take Profit - FIXED VERSION
+     * ✅✅✅ Execute trade dengan Stop Loss & Take Profit - CORRECT VERSION
      */
     private function executeTradeWithSLTP(User $user, AiDecision $decision): array
     {
@@ -329,11 +329,12 @@ class RealTradingExecutionService
                 'quantity' => $positionSize['quantity'],
                 'stop_loss' => $stopLossPrice,
                 'take_profit' => $takeProfitPrice,
-                'leverage' => $this->leverage
+                'leverage' => $this->leverage,
+                'balance' => $balance
             ]);
             
-            // 7. Place MAIN LIMIT order (order pembuka - tanpa reduceOnly)
-            $mainOrder = $this->placeMainOrder(
+            // 7. Place MAIN LIMIT order (order pembuka)
+            $mainOrder = $this->placeLimitOrder(
                 $binance,
                 $decision->symbol,
                 $positionType,
@@ -347,26 +348,33 @@ class RealTradingExecutionService
             
             $mainOrderId = $mainOrder['order_id'];
             
-            // 8. Place OCO Order (Stop Loss + Take Profit dalam satu paket)
-            $ocoResult = $this->placeOCOOrders(
+            // 8. Place Stop Loss order
+            $stopLossOrderId = $this->placeStopLossOrder(
                 $binance,
                 $decision->symbol,
                 $positionType,
                 $positionSize['quantity'],
-                $stopLossPrice,
-                $takeProfitPrice,
-                $mainOrderId
+                $stopLossPrice
             );
             
-            // 9. Save to database
+            // 9. Place Take Profit order
+            $takeProfitOrderId = $this->placeTakeProfitOrder(
+                $binance,
+                $decision->symbol,
+                $positionType,
+                $positionSize['quantity'],
+                $takeProfitPrice
+            );
+            
+            // 10. Save to database
             $pendingOrder = $this->savePendingOrder(
                 $user->id,
                 $decision,
                 $positionType,
                 $positionSize,
                 $mainOrderId,
-                $ocoResult['stop_loss_order_id'] ?? null,
-                $ocoResult['take_profit_order_id'] ?? null,
+                $stopLossOrderId,
+                $takeProfitOrderId,
                 $stopLossPrice,
                 $takeProfitPrice
             );
@@ -376,8 +384,8 @@ class RealTradingExecutionService
                 'order_id' => $mainOrderId,
                 'amount' => $positionSize['amount'],
                 'quantity' => $positionSize['quantity'],
-                'sl_order_id' => $ocoResult['stop_loss_order_id'] ?? null,
-                'tp_order_id' => $ocoResult['take_profit_order_id'] ?? null
+                'sl_order_id' => $stopLossOrderId,
+                'tp_order_id' => $takeProfitOrderId
             ]);
             
             return [
@@ -393,8 +401,8 @@ class RealTradingExecutionService
                 'entry_price' => $decision->price,
                 'stop_loss' => $stopLossPrice,
                 'take_profit' => $takeProfitPrice,
-                'sl_order_id' => $ocoResult['stop_loss_order_id'] ?? null,
-                'tp_order_id' => $ocoResult['take_profit_order_id'] ?? null,
+                'sl_order_id' => $stopLossOrderId,
+                'tp_order_id' => $takeProfitOrderId,
                 'leverage' => $this->leverage
             ];
             
@@ -411,21 +419,28 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place MAIN order (LIMIT order pembuka posisi)
+     * ✅ Place LIMIT order (method yang benar)
      */
-    private function placeMainOrder($binance, string $symbol, string $positionType, float $quantity, float $price): array
+    private function placeLimitOrder($binance, string $symbol, string $positionType, float $quantity, float $price): array
     {
         try {
             $side = $positionType === 'LONG' ? 'BUY' : 'SELL';
             
-            $order = $binance->futuresNewOrder($symbol, $side, 'LIMIT', [
+            // Format parameter yang benar
+            $params = [
+                'symbol' => $symbol,
+                'side' => $side,
+                'type' => 'LIMIT',
                 'quantity' => $quantity,
                 'price' => $price,
                 'timeInForce' => 'GTC'
-            ]);
+            ];
+            
+            // Gunakan method yang benar
+            $order = $binance->futuresOrder($params);
             
             if (!isset($order['orderId'])) {
-                throw new \Exception("Main order failed: " . json_encode($order));
+                throw new \Exception("Limit order failed: " . json_encode($order));
             }
             
             return [
@@ -435,7 +450,7 @@ class RealTradingExecutionService
             ];
             
         } catch (\Exception $e) {
-            Log::error("Main order placement failed: " . $e->getMessage());
+            Log::error("Limit order placement failed: " . $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage()
@@ -444,114 +459,60 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place OCO Orders (Stop Loss + Take Profit dalam satu paket) - RECOMMENDED
+     * ✅ Place STOP LOSS order (method yang benar)
      */
-    private function placeOCOOrders($binance, string $symbol, string $positionType, float $quantity, 
-                                   float $stopLossPrice, float $takeProfitPrice, string $mainOrderId): array
+    private function placeStopLossOrder($binance, string $symbol, string $positionType, float $quantity, float $stopPrice): ?string
     {
         try {
-            // Tentukan sisi order untuk SL/TP (selalu berlawanan dengan posisi)
             $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
             
-            // Buat OCO order
-            $ocoOrder = $binance->futuresNewOrder($symbol, $side, 'OCO', [
+            $params = [
+                'symbol' => $symbol,
+                'side' => $side,
+                'type' => 'STOP_MARKET',
                 'quantity' => $quantity,
-                'price' => $takeProfitPrice, // Price untuk LIMIT (Take Profit)
-                'stopPrice' => $stopLossPrice, // Stop price untuk STOP_MARKET
-                'stopLimitPrice' => $stopLossPrice, // Harga limit untuk stop (sama dengan stopPrice untuk MARKET)
-                'stopLimitTimeInForce' => 'GTC',
-                'listClientOrderId' => 'oco_' . $mainOrderId
-            ]);
-            
-            // Parse response OCO
-            $orderListId = $ocoOrder['orderListId'] ?? null;
-            
-            if (!$orderListId) {
-                throw new \Exception("OCO order failed: " . json_encode($ocoOrder));
-            }
-            
-            // Ambil order IDs dari OCO response
-            $orders = $ocoOrder['orderReports'] ?? [];
-            $stopLossOrderId = null;
-            $takeProfitOrderId = null;
-            
-            foreach ($orders as $orderReport) {
-                if ($orderReport['type'] === 'STOP_MARKET' || $orderReport['type'] === 'STOP') {
-                    $stopLossOrderId = $orderReport['orderId'] ?? null;
-                } elseif ($orderReport['type'] === 'LIMIT') {
-                    $takeProfitOrderId = $orderReport['orderId'] ?? null;
-                }
-            }
-            
-            Log::info("OCO order placed successfully", [
-                'order_list_id' => $orderListId,
-                'sl_order_id' => $stopLossOrderId,
-                'tp_order_id' => $takeProfitOrderId,
-                'symbol' => $symbol
-            ]);
-            
-            return [
-                'success' => true,
-                'order_list_id' => $orderListId,
-                'stop_loss_order_id' => $stopLossOrderId,
-                'take_profit_order_id' => $takeProfitOrderId
+                'stopPrice' => $stopPrice,
+                'reduceOnly' => 'true',
+                'workingType' => 'MARK_PRICE',
+                'timeInForce' => 'GTC'
             ];
             
-        } catch (\Exception $e) {
-            Log::error("OCO order placement failed: " . $e->getMessage());
+            $order = $binance->futuresOrder($params);
             
-            // Fallback: Place separate orders jika OCO gagal
-            return $this->placeSeparateSLTPOrders($binance, $symbol, $positionType, $quantity, $stopLossPrice, $takeProfitPrice);
+            return $order['orderId'] ?? null;
+            
+        } catch (\Exception $e) {
+            Log::error("Stop loss order failed: " . $e->getMessage());
+            return null;
         }
     }
     
     /**
-     * ✅ Fallback: Place separate SL/TP orders jika OCO gagal
+     * ✅ Place TAKE PROFIT order (method yang benar)
      */
-    private function placeSeparateSLTPOrders($binance, string $symbol, string $positionType, float $quantity,
-                                           float $stopLossPrice, float $takeProfitPrice): array
+    private function placeTakeProfitOrder($binance, string $symbol, string $positionType, float $quantity, float $takeProfitPrice): ?string
     {
-        $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
-        $stopLossOrderId = null;
-        $takeProfitOrderId = null;
-        
         try {
-            // Place Stop Loss (STOP_MARKET dengan reduceOnly)
-            $slOrder = $binance->futuresNewOrder($symbol, $side, 'STOP_MARKET', [
-                'quantity' => $quantity,
-                'stopPrice' => $stopLossPrice,
-                'reduceOnly' => 'true',
-                'workingType' => 'MARK_PRICE'
-            ]);
+            $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
             
-            $stopLossOrderId = $slOrder['orderId'] ?? null;
-            Log::info("Separate Stop Loss order placed", ['order_id' => $stopLossOrderId]);
-            
-        } catch (\Exception $e) {
-            Log::error("Separate Stop Loss order failed: " . $e->getMessage());
-        }
-        
-        try {
-            // Place Take Profit (LIMIT dengan reduceOnly)
-            $tpOrder = $binance->futuresNewOrder($symbol, $side, 'LIMIT', [
+            $params = [
+                'symbol' => $symbol,
+                'side' => $side,
+                'type' => 'LIMIT',
                 'quantity' => $quantity,
                 'price' => $takeProfitPrice,
                 'timeInForce' => 'GTC',
                 'reduceOnly' => 'true'
-            ]);
+            ];
             
-            $takeProfitOrderId = $tpOrder['orderId'] ?? null;
-            Log::info("Separate Take Profit order placed", ['order_id' => $takeProfitOrderId]);
+            $order = $binance->futuresOrder($params);
+            
+            return $order['orderId'] ?? null;
             
         } catch (\Exception $e) {
-            Log::error("Separate Take Profit order failed: " . $e->getMessage());
+            Log::error("Take profit order failed: " . $e->getMessage());
+            return null;
         }
-        
-        return [
-            'success' => ($stopLossOrderId || $takeProfitOrderId),
-            'stop_loss_order_id' => $stopLossOrderId,
-            'take_profit_order_id' => $takeProfitOrderId
-        ];
     }
     
     /**
@@ -560,22 +521,33 @@ class RealTradingExecutionService
     private function cleanupFailedOrders($binance, string $symbol, ?string $orderId = null): void
     {
         try {
+            // Cancel main order jika ada
             if ($orderId) {
-                $binance->futuresCancel($symbol, $orderId);
-                Log::info("Cleaned up failed order", ['order_id' => $orderId]);
-            }
-            
-            // Juga coba cancel open orders untuk symbol ini
-            $openOrders = $binance->futuresOpenOrders($symbol);
-            foreach ($openOrders as $order) {
                 try {
-                    $binance->futuresCancel($symbol, $order['orderId']);
+                    $binance->futuresCancel($symbol, $orderId);
+                    Log::info("✅ Cancelled failed order", ['order_id' => $orderId]);
                 } catch (\Exception $e) {
-                    // Ignore cancellation errors during cleanup
+                    // Order mungkin sudah cancelled atau filled
                 }
             }
+            
+            // Coba cancel semua open orders untuk symbol ini
+            try {
+                $openOrders = $binance->futuresOpenOrders($symbol);
+                foreach ($openOrders as $order) {
+                    try {
+                        $binance->futuresCancel($symbol, $order['orderId']);
+                        Log::info("✅ Cancelled open order", ['order_id' => $order['orderId']]);
+                    } catch (\Exception $e) {
+                        // Ignore
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ignore
+            }
+            
         } catch (\Exception $e) {
-            // Ignore errors during cleanup
+            Log::warning("Cleanup failed: " . $e->getMessage());
         }
     }
     
@@ -654,7 +626,7 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Calculate position size dengan risk management - IMPROVED
+     * ✅ Calculate position size dengan risk management
      */
     private function calculatePositionSize(float $balance, float $entryPrice, string $positionType): array
     {
@@ -664,20 +636,21 @@ class RealTradingExecutionService
         // Batasan: Min $11, Max $50
         $riskAmount = max(11, min($riskAmount, 50));
         
-        // Adjust untuk leverage
+        // Position size dengan leverage
         $positionAmount = $riskAmount * $this->leverage;
         
         // Quantity berdasarkan entry price
         $quantity = $positionAmount / $entryPrice;
         
         // Round quantity ke precision yang sesuai
-        $quantity = round($quantity, $this->getQuantityPrecision($entryPrice));
+        $quantity = $this->roundQuantity($quantity);
         
-        // Pastikan quantity minimum terpenuhi
+        // Cek minimum quantity
         $minQuantity = $this->getMinQuantity($entryPrice);
         if ($quantity < $minQuantity) {
             $quantity = $minQuantity;
             $positionAmount = $quantity * $entryPrice / $this->leverage;
+            $riskAmount = $positionAmount / $this->leverage;
         }
         
         return [
@@ -691,32 +664,29 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Helper: Get quantity precision
+     * ✅ Round quantity dengan precision yang tepat
      */
-    private function getQuantityPrecision(float $price): int
+    private function roundQuantity(float $quantity): float
     {
-        if ($price >= 1000) return 2;
-        if ($price >= 100) return 3;
-        if ($price >= 10) return 4;
-        if ($price >= 1) return 5;
-        return 6;
+        // Precision untuk futures trading biasanya 3 decimal
+        return round($quantity, 3);
     }
     
     /**
-     * ✅ Helper: Get minimum quantity
+     * ✅ Get minimum quantity berdasarkan symbol
      */
     private function getMinQuantity(float $price): float
     {
-        // Minimum order value biasanya $10 di Binance Futures
+        // Minimum order value di Binance Futures adalah $10
         $minOrderValue = 10;
         $minQuantity = $minOrderValue / $price;
         
-        // Round up untuk pastikan melebihi minimum
-        return ceil($minQuantity * 10000) / 10000;
+        // Round up dan tambahkan sedikit buffer
+        return round($minQuantity * 1.1, 3);
     }
     
     /**
-     * ✅ Save pending order ke database - IMPROVED
+     * ✅ Save pending order ke database
      */
     private function savePendingOrder(
         int $userId,
@@ -938,12 +908,17 @@ class RealTradingExecutionService
             
             $stopLossSide = $order->side === 'BUY' ? 'SELL' : 'BUY';
             
-            $stopLossOrder = $binance->futuresNewOrder($order->symbol, $stopLossSide, 'STOP_MARKET', [
+            $params = [
+                'symbol' => $order->symbol,
+                'side' => $stopLossSide,
+                'type' => 'STOP_MARKET',
                 'quantity' => $order->quantity,
                 'stopPrice' => $stopLossPrice,
                 'reduceOnly' => 'true',
                 'workingType' => 'MARK_PRICE'
-            ]);
+            ];
+            
+            $stopLossOrder = $binance->futuresOrder($params);
             
             if (!isset($stopLossOrder['orderId'])) {
                 throw new \Exception("Stop loss order failed: " . json_encode($stopLossOrder));
@@ -1039,17 +1014,17 @@ class RealTradingExecutionService
     private function setLeverage($binance, $symbol, $leverage)
     {
         try {
-            // Coba futures leverage terlebih dahulu
+            // Coba beberapa method leverage
             if (method_exists($binance, 'futures_change_leverage')) {
                 return $binance->futures_change_leverage($symbol, $leverage);
             } elseif (method_exists($binance, 'change_leverage')) {
                 return $binance->change_leverage($symbol, $leverage);
-            }
-            
-            // Fallback ke margin leverage
-            if (method_exists($binance, 'futuresLeverage')) {
+            } elseif (method_exists($binance, 'futuresLeverage')) {
                 return $binance->futuresLeverage($symbol, $leverage);
             }
+            
+            Log::warning("Leverage method not found, defaulting to 5x");
+            return null;
             
         } catch (\Exception $e) {
             Log::warning("Leverage setting failed (non-critical): " . $e->getMessage());
@@ -1065,10 +1040,12 @@ class RealTradingExecutionService
         $percentage = $this->stopLossPercentage / 100;
         
         if ($positionType === 'LONG') {
-            return round($entryPrice * (1 - $percentage), $this->getPricePrecision($entryPrice));
+            $slPrice = $entryPrice * (1 - $percentage);
         } else {
-            return round($entryPrice * (1 + $percentage), $this->getPricePrecision($entryPrice));
+            $slPrice = $entryPrice * (1 + $percentage);
         }
+        
+        return round($slPrice, 4); // 4 decimal places cukup untuk kebanyakan crypto
     }
     
     /**
@@ -1079,22 +1056,12 @@ class RealTradingExecutionService
         $percentage = $this->takeProfitPercentage / 100;
         
         if ($positionType === 'LONG') {
-            return round($entryPrice * (1 + $percentage), $this->getPricePrecision($entryPrice));
+            $tpPrice = $entryPrice * (1 + $percentage);
         } else {
-            return round($entryPrice * (1 - $percentage), $this->getPricePrecision($entryPrice));
+            $tpPrice = $entryPrice * (1 - $percentage);
         }
-    }
-    
-    /**
-     * ✅ HELPER: Get price precision
-     */
-    private function getPricePrecision(float $price): int
-    {
-        if ($price >= 1000) return 1;
-        if ($price >= 100) return 2;
-        if ($price >= 10) return 3;
-        if ($price >= 1) return 4;
-        return 5;
+        
+        return round($tpPrice, 4);
     }
     
     /**
@@ -1102,7 +1069,7 @@ class RealTradingExecutionService
      */
     private function getPositionTypeFromAction($action): string
     {
-        $action = strtoupper($action);
+        $action = strtoupper(trim($action));
         
         if ($action === 'BUY' || $action === 'LONG') {
             return 'LONG';
@@ -1110,7 +1077,8 @@ class RealTradingExecutionService
             return 'SHORT';
         }
         
-        // Default to LONG jika tidak dikenali
+        // Default ke LONG jika tidak dikenali
+        Log::warning("Unknown action: {$action}, defaulting to LONG");
         return 'LONG';
     }
 }
