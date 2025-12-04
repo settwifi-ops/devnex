@@ -19,7 +19,7 @@ class CreatePendingOrdersTable extends Migration
             $table->enum('side', ['BUY', 'SELL']);
             $table->enum('position_type', ['LONG', 'SHORT']);
             $table->timestamp('expires_at');
-            $table->enum('status', ['PENDING', 'FILLED', 'EXPIRED', 'CANCELLED'])->default('PENDING');
+            $table->enum('status', ['PENDING', 'FILLED', 'EXPIRED', 'CANCELLED', 'NEW'])->default('PENDING');
             $table->text('notes')->nullable();
             $table->timestamps();
 
