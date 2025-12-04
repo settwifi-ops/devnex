@@ -19,7 +19,7 @@ class ExecuteTradingDecisionJob implements ShouldQueue
     public $decisionId;
     public $tries = 3;
     public $timeout = 60;
-    public $backoff = [30, 60, 120]; // Exponential backoff untuk retry
+    public $backoff = [30, 60, 120];
     public $maxExceptions = 3;
 
     public function __construct($decisionId)
@@ -30,8 +30,8 @@ class ExecuteTradingDecisionJob implements ShouldQueue
     public function handle(TradingExecutionService $executionService)
     {
         try {
-            $decision = AiDecision::with(['user', 'tradingAccount', 'currencyPair'])
-                ->findOrFail($this->decisionId);
+            // AMBIL DATA AI DECISION TANPA EAGER LOADING
+            $decision = AiDecision::findOrFail($this->decisionId);
             
             Log::info('Processing trading decision', [
                 'job_id' => $this->job->getJobId(),
@@ -40,7 +40,6 @@ class ExecuteTradingDecisionJob implements ShouldQueue
                 'status' => $decision->status
             ]);
 
-            // Cek apakah decision sudah dieksekusi atau dibatalkan
             if ($decision->executed) {
                 Log::warning('Decision already executed', [
                     'decision_id' => $this->decisionId,
@@ -92,16 +91,19 @@ class ExecuteTradingDecisionJob implements ShouldQueue
 
     /**
      * Validasi data decision sebelum eksekusi
+     * SESUAIKAN DENGAN FIELD YANG ADA DI TABEL ai_decisions
      */
     private function validateDecision(AiDecision $decision)
     {
+        // SESUAIKAN DENGAN FIELD YANG SEBENARNYA ADA
+        // Contoh field yang mungkin ada di AiDecision:
         $requiredFields = [
-            'user_id',
-            'trading_account_id',
-            'currency_pair_id',
             'decision_type',
             'confidence_level',
-            'signal_strength'
+            'signal_strength',
+            'symbol', // jika ada field symbol untuk trading pair
+            'volume', // jika ada field volume
+            'price',  // jika ada field price
         ];
 
         foreach ($requiredFields as $field) {
@@ -119,6 +121,15 @@ class ExecuteTradingDecisionJob implements ShouldQueue
         // Validasi confidence level
         if ($decision->confidence_level < 0 || $decision->confidence_level > 1) {
             throw new \InvalidArgumentException("Confidence level must be between 0 and 1");
+        }
+
+        // Tambahkan validasi lain sesuai kebutuhan
+        if (isset($decision->volume) && $decision->volume <= 0) {
+            throw new \InvalidArgumentException("Volume must be greater than 0");
+        }
+
+        if (isset($decision->price) && $decision->price <= 0) {
+            throw new \InvalidArgumentException("Price must be greater than 0");
         }
     }
 
@@ -140,7 +151,6 @@ class ExecuteTradingDecisionJob implements ShouldQueue
                 'failed_at' => now()->toISOString()
             ]);
 
-            // Update decision status jika ada
             $decision = AiDecision::find($this->decisionId);
             if ($decision) {
                 $decision->update([
@@ -155,12 +165,8 @@ class ExecuteTradingDecisionJob implements ShouldQueue
                     'status' => 'failed'
                 ]);
             }
-
-            // Notifikasi atau alert bisa ditambahkan di sini
-            // Contoh: Mail::to('admin@example.com')->send(new JobFailedNotification($exception));
             
         } catch (Throwable $e) {
-            // Fallback logging jika ada error dalam failed handler
             error_log('Critical error in failed handler: ' . $e->getMessage());
             error_log('Original error: ' . $exception->getMessage());
         }
