@@ -24,7 +24,7 @@ class RealTradingExecutionService
     private $takeProfitPercentage = 4.0; // 4% take profit
     private $riskPerTrade = 0.02; // 2% risk per trade
     private $orderExpiryMinutes = 15; // 15 menit expiry
-    private $leverage = 20; // 5x leverage
+    private $leverage = 5; // 5x leverage
     private $batchSize = 25; // Process 25 users per batch
     
     // Rate limiting
@@ -504,70 +504,25 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Calculate position size sebagai MARGIN (USDT amount)
+     * ✅ Calculate position size dengan risk management
      */
     private function calculatePositionSize(float $balance, float $entryPrice): array
     {
-        // 1. Hitung margin yang akan digunakan (bukan risk amount kecil)
-        // Misalnya: 50% dari balance untuk setiap trade
-        $marginPercentage = 0.50; // 50% dari balance sebagai margin
-        $marginAmount = $balance * $marginPercentage;
+        // Risk amount: 2% dari balance
+        $riskAmount = $balance * $this->riskPerTrade;
         
-        // 2. Batasan margin (sesuaikan dengan kebutuhan)
-        $minMargin = 11; // Minimum $11 margin
-        $maxMargin = min($balance * 0.80, 1000); // Max 80% dari balance atau $1000
+        // Batasan: Min $11, Max $50
+        $riskAmount = max(11, min($riskAmount, 50));
         
-        $marginAmount = max($minMargin, min($marginAmount, $maxMargin));
-        
-        // 3. Hitung quantity berdasarkan margin dan leverage
-        // Formula: Quantity = (Margin × Leverage) / Entry Price
-        $effectiveAmount = $marginAmount * $this->leverage;
-        $quantity = $effectiveAmount / $entryPrice;
-        
-        // 4. Round quantity untuk precision (sesuaikan dengan symbol)
-        $quantity = $this->roundQuantity($quantity, $entryPrice);
-        
-        // 5. Hitung kembali actual margin berdasarkan quantity
-        $actualMargin = ($quantity * $entryPrice) / $this->leverage;
-        
-        Log::info("💰 Position size calculation", [
-            'balance' => $balance,
-            'margin_percentage' => $marginPercentage * 100 . '%',
-            'margin_amount' => $marginAmount,
-            'leverage' => $this->leverage,
-            'entry_price' => $entryPrice,
-            'effective_amount' => $effectiveAmount,
-            'quantity' => $quantity,
-            'actual_margin' => $actualMargin
-        ]);
+        // Quantity berdasarkan entry price
+        $quantity = $riskAmount / $entryPrice;
         
         return [
-            'amount' => $actualMargin, // Margin yang sebenarnya digunakan
+            'amount' => $riskAmount,
             'quantity' => $quantity,
-            'margin_percentage' => $marginPercentage * 100,
-            'leverage' => $this->leverage,
-            'notional_value' => $quantity * $entryPrice, // Nilai kontrak total
-            'balance_used' => $actualMargin
+            'risk_percentage' => $this->riskPerTrade * 100,
+            'balance_used' => $riskAmount
         ];
-    }
-
-    /**
-     * ✅ Round quantity untuk precision
-     */
-    private function roundQuantity(float $quantity, float $price): float
-    {
-        // Aturan rounding berdasarkan price range
-        if ($price >= 1000) {
-            // Untuk high-priced assets (misal BTC)
-            return round($quantity, 3); // 3 decimal places
-        } elseif ($price >= 100) {
-            return round($quantity, 2); // 2 decimal places
-        } elseif ($price >= 10) {
-            return round($quantity, 1); // 1 decimal place
-        } else {
-            // Untuk low-priced assets
-            return round($quantity, 0); // No decimal
-        }
     }
     
     /**

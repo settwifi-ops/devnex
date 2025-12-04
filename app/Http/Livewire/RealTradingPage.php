@@ -769,7 +769,7 @@ class RealTradingPage extends Component
     }
 
     /**
-     * Close position langsung di Binance - REVISED (without reduceOnly)
+     * Close position langsung di Binance
      */
     public function closePosition($positionData)
     {
@@ -787,7 +787,7 @@ class RealTradingPage extends Component
             $quantity = $positionData['quantity'];
             $side = $positionData['side'];
             
-            // Determine order side (opposite of position untuk close)
+            // Determine order side (opposite of position)
             $orderSide = $side === 'BUY' ? 'SELL' : 'BUY';
             
             // Get current price
@@ -810,101 +810,40 @@ class RealTradingPage extends Component
                 'current_price' => $currentPrice
             ]);
             
-            // ✅ OPTION 1: Gunakan STOP_MARKET dengan closePosition (recommended)
-            // Ini akan langsung close semua posisi untuk symbol tersebut
-            try {
-                // Parameter untuk close position
-                $params = [
-                    'symbol' => $symbol,
-                    'side' => $orderSide,
-                    'type' => 'MARKET',
-                    'quantity' => $quantity,
-                    'timeInForce' => 'GTC'
-                ];
-                
-                // ✅ Coba berbagai method yang tersedia
-                if (method_exists($binance, 'futuresOrder')) {
-                    $order = $binance->futuresOrder($params);
-                } elseif (method_exists($binance, 'futures_order')) {
-                    $order = $binance->futures_order($params);
-                } elseif (method_exists($binance, 'order')) {
-                    $order = $binance->order($params);
-                } else {
-                    throw new \Exception("No order method available");
-                }
-                
-                Log::info("✅ Close Order Placed", [
-                    'order_id' => $order['orderId'] ?? 'N/A',
-                    'status' => $order['status'] ?? 'N/A',
-                    'params' => $params
+            // Place market order to close position
+            // Gunakan method yang tersedia di jaggedsoft
+            if (method_exists($binance, 'futuresMarket')) {
+                $order = $binance->futuresMarket($symbol, $orderSide, $quantity, [
+                    'reduceOnly' => true
                 ]);
-                
-            } catch (\Exception $e) {
-                Log::warning("Method 1 failed, trying alternative...", ['error' => $e->getMessage()]);
-                
-                // ✅ OPTION 2: Gunakan STOP_MARKET dengan closePosition parameter
-                try {
-                    $params = [
-                        'symbol' => $symbol,
-                        'side' => $orderSide,
-                        'type' => 'STOP_MARKET',
-                        'quantity' => $quantity,
-                        'stopPrice' => $currentPrice * 0.99, // Price slightly below current
-                        'closePosition' => 'true' // Ini yang akan close semua position
-                    ];
-                    
-                    if (method_exists($binance, 'futuresOrder')) {
-                        $order = $binance->futuresOrder($params);
-                    }
-                    
-                    Log::info("✅ Close via STOP_MARKET", [
-                        'order_id' => $order['orderId'] ?? 'N/A',
-                        'status' => $order['status'] ?? 'N/A'
-                    ]);
-                    
-                } catch (\Exception $e2) {
-                    Log::warning("Method 2 failed, trying direct market...", ['error' => $e2->getMessage()]);
-                    
-                    // ✅ OPTION 3: Simple market order
-                    $params = [
-                        'symbol' => $symbol,
-                        'side' => $orderSide,
-                        'type' => 'MARKET',
-                        'quantity' => $quantity
-                    ];
-                    
-                    if (method_exists($binance, 'futuresOrder')) {
-                        $order = $binance->futuresOrder($params);
-                    }
-                }
+            } elseif (method_exists($binance, 'futuresOrder')) {
+                $order = $binance->futuresOrder($symbol, $orderSide, $quantity, 0, 'MARKET', [
+                    'reduceOnly' => true
+                ]);
+            } elseif (method_exists($binance, 'order')) {
+                $order = $binance->order($symbol, $orderSide, $quantity, 0, 'MARKET');
+            } else {
+                throw new \Exception("No order method available");
             }
             
+            Log::info("✅ Close Order Placed", [
+                'order_id' => $order['orderId'] ?? 'N/A',
+                'status' => $order['status'] ?? 'N/A'
+            ]);
+            
             // Tunggu sebentar lalu reload positions
-            sleep(3);
+            sleep(2);
             $this->loadBinancePositions();
             $this->loadPendingOrders();
             
-            // Invalidate cache setelah close position
-            $this->tradingCache->invalidateUserCache($this->user->id);
-            
             session()->flash('message', 
                 "Position {$symbol} closed successfully! " .
-                "Order ID: " . ($order['orderId'] ?? 'N/A') . " " .
-                "Quantity: " . number_format($quantity, 4)
+                "Market order placed at $" . number_format($currentPrice, 4)
             );
-            
-            Log::info("✅ Position closed successfully", [
-                'user_id' => $this->user->id,
-                'symbol' => $symbol,
-                'order_id' => $order['orderId'] ?? 'N/A'
-            ]);
             
         } catch (\Exception $e) {
             session()->flash('error', 'Failed to close position: ' . $e->getMessage());
-            Log::error("❌ Close Position Error: " . $e->getMessage(), [
-                'user_id' => $this->user->id,
-                'position_data' => $positionData
-            ]);
+            Log::error("❌ Close Position Error: " . $e->getMessage());
         } finally {
             $this->closingPositionId = null;
         }
