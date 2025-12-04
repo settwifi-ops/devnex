@@ -6,13 +6,10 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\AiDecision;
 use App\Models\PendingOrder;
+use App\Models\RealOrder;
 use App\Services\Cache\TradingCacheService;
-use App\Jobs\ProcessTradeBatch;
-use App\Jobs\RefreshUserDataJob;
-use App\Jobs\SyncPendingOrdersJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class RealTradingExecutionService
 {
@@ -40,71 +37,125 @@ class RealTradingExecutionService
     }
 
     /**
-     * ✅ ENHANCED: Execute REAL trade dengan queue system untuk ratusan user
+     * ✅ Execute REAL trade untuk semua eligible users
      */
     public function executeRealTrade(AiDecision $decision): array
     {
         Log::info("🚀 REAL TRADING: Starting execution for {$decision->action} {$decision->symbol}");
         
-        // 1. Cek rate limiting untuk symbol ini
-        $rateLimit = $this->tradingCache->limitSymbolTrading($decision->symbol);
-        if (!$rateLimit['allowed']) {
-            Log::warning("Rate limit exceeded for symbol {$decision->symbol}");
+        try {
+            // 1. Cek rate limiting untuk symbol ini
+            $rateLimit = $this->tradingCache->limitSymbolTrading($decision->symbol);
+            if (!$rateLimit['allowed']) {
+                Log::warning("Rate limit exceeded for symbol {$decision->symbol}");
+                return [
+                    'success' => false,
+                    'message' => 'Rate limit exceeded. Please wait before trading this symbol again.',
+                    'retry_after' => $rateLimit['retry_after'] ?? 60,
+                    'users_processed' => 0
+                ];
+            }
+            
+            // 2. Cek jika trade sudah sedang berjalan untuk symbol ini
+            if ($this->tradingCache->isTradeInProgress($decision->symbol)) {
+                $progress = $this->tradingCache->getTradeProgress($decision->symbol);
+                Log::info("Trade already in progress for {$decision->symbol}", $progress ?? []);
+                
+                return [
+                    'success' => false,
+                    'message' => 'Trade is already being processed for this symbol.',
+                    'users_in_progress' => $progress['user_ids'] ?? [],
+                    'started_at' => $progress['started_at'] ?? null
+                ];
+            }
+            
+            // 3. Get eligible users dengan optimasi query
+            $eligibleUsers = $this->getEligibleUsers();
+            
+            if ($eligibleUsers->isEmpty()) {
+                Log::warning("No eligible users for real trading");
+                return [
+                    'success' => false,
+                    'message' => 'No eligible users found for trading.',
+                    'users_processed' => 0
+                ];
+            }
+            
+            Log::info("🎯 Found {$eligibleUsers->count()} eligible users for {$decision->symbol}");
+            
+            // 4. Mark trade as in progress di cache
+            $this->tradingCache->markTradeInProgress(
+                $decision->symbol, 
+                $eligibleUsers->pluck('id')->toArray()
+            );
+            
+            // 5. Execute trades satu per satu (lebih reliable daripada batch)
+            $results = $this->executeTradesSequentially($eligibleUsers, $decision);
+            
+            // 6. Clear trade progress dari cache
+            $this->tradingCache->clearTradeProgress($decision->symbol);
+            
+            // 7. Return hasil
+            $successCount = collect($results)->where('success', true)->count();
+            $failCount = collect($results)->where('success', false)->count();
+            
             return [
-                'success' => false,
-                'message' => 'Rate limit exceeded. Please wait before trading this symbol again.',
-                'retry_after' => $rateLimit['retry_after'] ?? 60,
-                'users_processed' => 0
+                'success' => $successCount > 0,
+                'message' => "Executed trades for {$successCount} users, {$failCount} failed",
+                'total_users' => $eligibleUsers->count(),
+                'success_count' => $successCount,
+                'fail_count' => $failCount,
+                'results' => $results,
+                'symbol' => $decision->symbol,
+                'action' => $decision->action
             ];
-        }
-        
-        // 2. Cek jika trade sudah sedang berjalan untuk symbol ini
-        if ($this->tradingCache->isTradeInProgress($decision->symbol)) {
-            $progress = $this->tradingCache->getTradeProgress($decision->symbol);
-            Log::info("Trade already in progress for {$decision->symbol}", $progress ?? []);
+            
+        } catch (\Exception $e) {
+            Log::error("Real trade execution failed: " . $e->getMessage());
+            
+            // Clear progress jika ada error
+            $this->tradingCache->clearTradeProgress($decision->symbol ?? 'unknown');
             
             return [
                 'success' => false,
-                'message' => 'Trade is already being processed for this symbol.',
-                'users_in_progress' => $progress['user_ids'] ?? [],
-                'started_at' => $progress['started_at'] ?? null
+                'message' => 'Trade execution failed: ' . $e->getMessage(),
+                'error' => get_class($e)
             ];
         }
+    }
+    
+    /**
+     * ✅ Execute trades secara sequential untuk menghindari rate limit
+     */
+    private function executeTradesSequentially($users, AiDecision $decision): array
+    {
+        $results = [];
         
-        // 3. Get eligible users dengan optimasi query
-        $eligibleUsers = $this->getEligibleUsers();
-        
-        if ($eligibleUsers->isEmpty()) {
-            Log::warning("No eligible users for real trading");
-            return [
-                'success' => false,
-                'message' => 'No eligible users found for trading.',
-                'users_processed' => 0
-            ];
+        foreach ($users as $user) {
+            try {
+                // Small delay antara user untuk menghindari rate limit
+                if (!empty($results)) {
+                    usleep(500000); // 0.5 detik delay
+                }
+                
+                $result = $this->executeForUser($user, $decision);
+                $results[] = $result;
+                
+                Log::info("Trade execution result for user {$user->id}: " . ($result['success'] ? 'SUCCESS' : 'FAILED'));
+                
+            } catch (\Exception $e) {
+                Log::error("Failed to execute trade for user {$user->id}: " . $e->getMessage());
+                
+                $results[] = [
+                    'success' => false,
+                    'user_id' => $user->id,
+                    'message' => $e->getMessage(),
+                    'error' => get_class($e)
+                ];
+            }
         }
         
-        Log::info("🎯 Found {$eligibleUsers->count()} eligible users for {$decision->symbol}");
-        
-        // 4. Mark trade as in progress di cache
-        $this->tradingCache->markTradeInProgress(
-            $decision->symbol, 
-            $eligibleUsers->pluck('id')->toArray()
-        );
-        
-        // 5. Dispatch jobs dalam batch
-        $batchesDispatched = $this->dispatchTradeBatches($eligibleUsers, $decision);
-        
-        // 6. Return real-time progress tracking
-        return [
-            'success' => true,
-            'message' => 'Trade execution started for ' . $eligibleUsers->count() . ' users.',
-            'total_users' => $eligibleUsers->count(),
-            'batches_dispatched' => $batchesDispatched,
-            'symbol' => $decision->symbol,
-            'action' => $decision->action,
-            'progress_key' => "trade:progress:{$decision->symbol}",
-            'estimated_completion' => now()->addMinutes(5)->toISOString()
-        ];
+        return $results;
     }
     
     /**
@@ -112,86 +163,53 @@ class RealTradingExecutionService
      */
     private function getEligibleUsers()
     {
-        // Gunakan chunking untuk menghindari memory issues
-        return User::query()
-            ->select(['users.id', 'users.email'])
-            ->with(['portfolio' => function($query) {
-                $query->select(['id', 'user_id', 'real_balance', 'real_trading_enabled', 'real_trading_active'])
-                      ->where('real_trading_enabled', true)
-                      ->where('real_trading_active', true)
-                      ->where('real_balance', '>=', 11);
-            }])
-            ->whereHas('portfolio', function($query) {
-                $query->where('real_trading_enabled', true)
-                      ->where('real_trading_active', true)
-                      ->where('real_balance', '>=', 11);
-            })
-            ->whereHas('binanceAccounts', function($query) {
-                $query->select('id')->active()->verified();
-            })
-            ->limit($this->maxUsersPerBatch) // Limit untuk safety
-            ->get()
-            ->filter(function($user) {
-                // Double check dengan cache
-                $cachedBalance = $this->tradingCache->getBalance($user->id);
-                $balance = $cachedBalance['total'] ?? $user->portfolio->real_balance ?? 0;
+        try {
+            $users = User::query()
+                ->select(['users.id', 'users.email'])
+                ->with(['portfolio' => function($query) {
+                    $query->select(['id', 'user_id', 'real_balance', 'real_trading_enabled', 'real_trading_active'])
+                          ->where('real_trading_enabled', true)
+                          ->where('real_trading_active', true)
+                          ->where('real_balance', '>=', 11);
+                }])
+                ->whereHas('portfolio', function($query) {
+                    $query->where('real_trading_enabled', true)
+                          ->where('real_trading_active', true)
+                          ->where('real_balance', '>=', 11);
+                })
+                ->whereHas('binanceAccounts', function($query) {
+                    $query->select('id')->active()->verified();
+                })
+                ->limit($this->maxUsersPerBatch)
+                ->get();
+            
+            // Filter tambahan di PHP
+            return $users->filter(function($user) {
+                if (!$user->portfolio) {
+                    return false;
+                }
                 
-                return $balance >= 11 && 
-                       !$this->tradingCache->isUserTrading($user->id);
+                // Cek cache untuk rate limiting
+                if ($this->tradingCache->isUserTrading($user->id)) {
+                    Log::info("User {$user->id} is currently trading, skipping");
+                    return false;
+                }
+                
+                return true;
             });
-    }
-    
-    /**
-     * ✅ Dispatch trade jobs dalam batch
-     */
-    private function dispatchTradeBatches($users, AiDecision $decision): int
-    {
-        $userIds = $users->pluck('id')->toArray();
-        $batchesDispatched = 0;
-        
-        // Chunk users untuk batch processing
-        foreach (array_chunk($userIds, $this->batchSize) as $batchIndex => $batchUserIds) {
-            try {
-                // Dispatch batch job dengan delay bertahap
-                ProcessTradeBatch::dispatch($batchUserIds, $decision->id)
-                    ->onQueue('trading_batch')
-                    ->delay(now()->addSeconds($batchIndex * 2)); // Staggered start
-                
-                $batchesDispatched++;
-                
-                Log::info("Dispatched batch {$batchIndex} for {$decision->symbol}", [
-                    'users' => count($batchUserIds),
-                    'delay' => $batchIndex * 2 . ' seconds'
-                ]);
-                
-            } catch (\Exception $e) {
-                Log::error("Failed to dispatch batch {$batchIndex}: " . $e->getMessage());
-            }
+            
+        } catch (\Exception $e) {
+            Log::error("Failed to get eligible users: " . $e->getMessage());
+            return collect();
         }
-        
-        // Schedule cleanup job untuk nanti
-        $this->scheduleCleanupJob($decision->symbol, $userIds);
-        
-        return $batchesDispatched;
     }
     
     /**
-     * ✅ Schedule cleanup job setelah semua batch selesai
-     */
-    private function scheduleCleanupJob(string $symbol, array $userIds): void
-    {
-        // Dispatch job untuk cleanup setelah 10 menit
-        \App\Jobs\CleanupTradeProgress::dispatch($symbol, $userIds)
-            ->delay(now()->addMinutes(10))
-            ->onQueue('trading');
-    }
-    
-    /**
-     * ✅ METHOD SINGLE USER: Untuk manual execution atau retry
+     * ✅ Execute trade untuk single user
      */
     public function executeForUser(User $user, AiDecision $decision): array
     {
-        Log::info("👤 Executing trade for single user {$user->id} - {$decision->symbol}");
+        Log::info("👤 Executing trade for user {$user->id} - {$decision->symbol}");
         
         try {
             // 1. Validasi user
@@ -206,6 +224,7 @@ class RealTradingExecutionService
             
             // 2. Cek duplicate orders
             if ($this->hasDuplicateOrder($user->id, $decision->symbol)) {
+                Log::warning("Duplicate order found for user {$user->id} symbol {$decision->symbol}");
                 return [
                     'success' => false,
                     'message' => 'User already has pending order for this symbol',
@@ -217,7 +236,7 @@ class RealTradingExecutionService
             // 3. Mark user as trading
             $this->tradingCache->setUserTrading($user->id, true);
             
-            // 4. Execute trade dalam transaction
+            // 4. Execute trade
             $result = DB::transaction(function () use ($user, $decision) {
                 return $this->executeTradeWithSLTP($user, $decision);
             });
@@ -227,19 +246,10 @@ class RealTradingExecutionService
                 $this->updateUserTradeCache($user->id, $result['order_id'] ?? null);
             }
             
-            // 6. Reset trading state
-            $this->tradingCache->setUserTrading($user->id, false);
-            
-            // 7. Trigger background data refresh
-            RefreshUserDataJob::dispatch($user->id);
-            
             return array_merge($result, ['user_id' => $user->id]);
             
         } catch (\Exception $e) {
-            Log::error("Single user trade execution failed for user {$user->id}: " . $e->getMessage());
-            
-            // Reset trading state
-            $this->tradingCache->setUserTrading($user->id, false);
+            Log::error("Trade execution failed for user {$user->id}: " . $e->getMessage());
             
             return [
                 'success' => false,
@@ -247,6 +257,9 @@ class RealTradingExecutionService
                 'user_id' => $user->id,
                 'error' => $e->getMessage()
             ];
+        } finally {
+            // 6. Reset trading state
+            $this->tradingCache->setUserTrading($user->id, false);
         }
     }
     
@@ -267,9 +280,8 @@ class RealTradingExecutionService
             return ['valid' => false, 'message' => 'Trading not enabled'];
         }
         
-        // 3. Cek balance (gunakan cache dulu)
-        $cachedBalance = $this->tradingCache->getBalance($user->id);
-        $balance = $cachedBalance['total'] ?? $portfolio->real_balance;
+        // 3. Cek balance
+        $balance = $portfolio->real_balance;
         
         if ($balance < 11) {
             return ['valid' => false, 'message' => 'Insufficient balance (minimum $11 required)'];
@@ -280,17 +292,7 @@ class RealTradingExecutionService
             return ['valid' => false, 'message' => 'No active Binance account'];
         }
         
-        // 5. Cek rate limiting
-        $rateLimit = $this->tradingCache->limitUserApiCall($user->id);
-        if (!$rateLimit['allowed']) {
-            return [
-                'valid' => false, 
-                'message' => 'Rate limit exceeded. Please wait before trading again.',
-                'retry_after' => $rateLimit['retry_after']
-            ];
-        }
-        
-        // 6. Cek jika user sedang trading
+        // 5. Cek jika user sedang trading
         if ($this->tradingCache->isUserTrading($user->id)) {
             return ['valid' => false, 'message' => 'User is currently trading'];
         }
@@ -311,7 +313,7 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Execute trade dengan Stop Loss & Take Profit - WITH COMPLETE CANCELLATION
+     * ✅ Execute trade dengan Stop Loss & Take Profit
      */
     private function executeTradeWithSLTP(User $user, AiDecision $decision): array
     {
@@ -319,14 +321,22 @@ class RealTradingExecutionService
             // 1. Get Binance instance
             $binance = $this->binanceAccountService->getBinanceInstance($user->id);
             
+            if (!$binance) {
+                throw new \Exception("Failed to get Binance instance");
+            }
+            
             // 2. Get balance
             $balance = $this->getUserBalance($user->id, $binance);
+            
+            if ($balance < 11) {
+                throw new \Exception("Insufficient balance: {$balance} USDT");
+            }
             
             // 3. Calculate position size
             $positionType = $this->getPositionTypeFromAction($decision->action);
             $positionSize = $this->calculatePositionSize($balance, $decision->price);
             
-            // 4. Set leverage
+            // 4. Set leverage (untuk futures)
             $this->setLeverage($binance, $decision->symbol, $this->leverage);
             
             // 5. Calculate SL/TP prices
@@ -341,10 +351,10 @@ class RealTradingExecutionService
                 'stop_loss' => $stopLossPrice,
                 'take_profit' => $takeProfitPrice,
                 'leverage' => $this->leverage,
-                'expires_in' => "{$this->orderExpiryMinutes} minutes"
+                'balance' => $balance
             ]);
             
-            // 6. Place MAIN LIMIT order
+            // 6. Place MAIN LIMIT order (menggunakan jaggedsoft/php-binance-api)
             $order = $this->placeLimitOrder(
                 $binance, 
                 $decision->symbol, 
@@ -360,25 +370,62 @@ class RealTradingExecutionService
             $mainOrderId = $order['order_id'];
             
             // 7. Place Stop Loss order
-            $stopLossOrderId = $this->placeStopLossOrder(
-                $binance,
-                $decision->symbol,
-                $positionType,
-                $positionSize['quantity'],
-                $stopLossPrice
-            );
+            $stopLossOrderId = null;
+            try {
+                $stopLossOrderId = $this->placeStopLossOrder(
+                    $binance,
+                    $decision->symbol,
+                    $positionType,
+                    $positionSize['quantity'],
+                    $stopLossPrice
+                );
+                
+                if ($stopLossOrderId) {
+                    Log::info("✅ Stop loss order placed for user {$user->id}", [
+                        'order_id' => $stopLossOrderId,
+                        'stop_price' => $stopLossPrice
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning("Stop loss order failed for user {$user->id}: " . $e->getMessage());
+            }
             
             // 8. Place Take Profit order
-            $takeProfitOrderId = $this->placeTakeProfitOrder(
-                $binance,
-                $decision->symbol,
+            $takeProfitOrderId = null;
+            try {
+                $takeProfitOrderId = $this->placeTakeProfitOrder(
+                    $binance,
+                    $decision->symbol,
+                    $positionType,
+                    $positionSize['quantity'],
+                    $takeProfitPrice
+                );
+                
+                if ($takeProfitOrderId) {
+                    Log::info("✅ Take profit order placed for user {$user->id}", [
+                        'order_id' => $takeProfitOrderId,
+                        'take_profit_price' => $takeProfitPrice
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning("Take profit order failed for user {$user->id}: " . $e->getMessage());
+            }
+            
+            // 9. Save Pending Order
+            $pendingOrder = $this->savePendingOrder(
+                $user->id,
+                $decision,
                 $positionType,
-                $positionSize['quantity'],
+                $positionSize,
+                $mainOrderId,
+                $stopLossOrderId,
+                $takeProfitOrderId,
+                $stopLossPrice,
                 $takeProfitPrice
             );
             
-            // 9. Save to database dengan status yang benar
-            $pendingOrder = $this->savePendingOrder(
+            // 10. Save Real Order
+            $realOrder = $this->saveRealOrder(
                 $user->id,
                 $decision,
                 $positionType,
@@ -393,10 +440,10 @@ class RealTradingExecutionService
             Log::info("✅ Trade executed successfully for user {$user->id}", [
                 'symbol' => $decision->symbol,
                 'order_id' => $mainOrderId,
+                'pending_order_id' => $pendingOrder->id,
+                'real_order_id' => $realOrder->id,
                 'amount' => $positionSize['amount'],
-                'quantity' => $positionSize['quantity'],
-                'sl_order_id' => $stopLossOrderId,
-                'tp_order_id' => $takeProfitOrderId
+                'quantity' => $positionSize['quantity']
             ]);
             
             return [
@@ -404,6 +451,7 @@ class RealTradingExecutionService
                 'message' => 'Trade executed successfully',
                 'order_id' => $mainOrderId,
                 'pending_order_id' => $pendingOrder->id,
+                'real_order_id' => $realOrder->id,
                 'symbol' => $decision->symbol,
                 'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
                 'quantity' => $positionSize['quantity'],
@@ -455,7 +503,7 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Fetch balance dari Binance
+     * ✅ Fetch balance dari Binance (jaggedsoft/php-binance-api)
      */
     private function fetchBinanceBalance($binance): array
     {
@@ -463,25 +511,22 @@ class RealTradingExecutionService
         $available = 0;
         
         try {
-            // Coba futures balance
-            if (method_exists($binance, 'futuresAccountBalance')) {
-                $futuresBalance = $binance->futuresAccountBalance();
+            // Method untuk jaggedsoft/php-binance-api
+            if (method_exists($binance, 'balances')) {
+                $balances = $binance->balances();
                 
-                foreach ($futuresBalance as $asset) {
-                    if (isset($asset['asset']) && $asset['asset'] === 'USDT') {
-                        $total = (float) $asset['balance'];
-                        $available = (float) ($asset['availableBalance'] ?? 0);
-                        break;
-                    }
+                if (isset($balances['USDT'])) {
+                    $total = (float) $balances['USDT']['available'];
+                    $available = (float) $balances['USDT']['available'];
                 }
             }
             
-            // Jika futures balance 0, coba spot
+            // Jika masih 0, coba method account
             if ($total <= 0 && method_exists($binance, 'account')) {
-                $accountInfo = $binance->account();
+                $account = $binance->account();
                 
-                if (isset($accountInfo['balances'])) {
-                    foreach ($accountInfo['balances'] as $balance) {
+                if (isset($account['balances'])) {
+                    foreach ($account['balances'] as $balance) {
                         if ($balance['asset'] === 'USDT') {
                             $total = (float) $balance['free'] + (float) $balance['locked'];
                             $available = (float) $balance['free'];
@@ -493,6 +538,7 @@ class RealTradingExecutionService
             
         } catch (\Exception $e) {
             Log::error("Failed to fetch Binance balance: " . $e->getMessage());
+            throw $e;
         }
         
         return [
@@ -517,6 +563,9 @@ class RealTradingExecutionService
         // Quantity berdasarkan entry price
         $quantity = $riskAmount / $entryPrice;
         
+        // Round quantity ke 6 decimal places
+        $quantity = round($quantity, 6);
+        
         return [
             'amount' => $riskAmount,
             'quantity' => $quantity,
@@ -526,33 +575,34 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place LIMIT order
+     * ✅ Place LIMIT order (jaggedsoft/php-binance-api)
      */
     private function placeLimitOrder($binance, string $symbol, string $positionType, float $quantity, float $price): array
     {
         try {
             $side = $positionType === 'LONG' ? 'BUY' : 'SELL';
             
-            $order = $binance->futuresOrder(
-                $side,
-                $symbol,
-                $quantity,
-                $price,
-                'LIMIT',
-                [
-                    'timeInForce' => 'GTC',
-                    'leverage' => $this->leverage
-                ]
-            );
+            // Untuk jaggedsoft/php-binance-api
+            if ($side === 'BUY') {
+                $order = $binance->buy($symbol, $quantity, $price);
+            } else {
+                $order = $binance->sell($symbol, $quantity, $price);
+            }
             
-            if (!isset($order['orderId'])) {
+            // Debug response
+            Log::debug("Binance order response", ['response' => $order]);
+            
+            if (!isset($order['orderId']) && !isset($order['clientOrderId'])) {
                 throw new \Exception("Limit order failed: " . json_encode($order));
             }
             
+            $orderId = $order['orderId'] ?? $order['clientOrderId'];
+            
             return [
                 'success' => true,
-                'order_id' => $order['orderId'],
-                'status' => $order['status'] ?? 'NEW'
+                'order_id' => (string) $orderId,
+                'status' => $order['status'] ?? 'NEW',
+                'raw_response' => $order
             ];
             
         } catch (\Exception $e) {
@@ -565,58 +615,51 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Place STOP LOSS order
+     * ✅ Place STOP LOSS order (jaggedsoft/php-binance-api)
      */
     private function placeStopLossOrder($binance, string $symbol, string $positionType, float $quantity, float $stopPrice): ?string
     {
         try {
             $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
             
-            $order = $binance->futuresOrder(
-                $side,
-                $symbol,
-                $quantity,
-                0, // Price 0 untuk STOP_MARKET
-                'STOP_MARKET',
-                [
-                    'stopPrice' => $stopPrice,
-                    'closePosition' => 'true',
-                    'reduceOnly' => 'true'
-                ]
-            );
+            // Untuk jaggedsoft/php-binance-api dengan STOP_LOSS_LIMIT
+            // Note: Binance spot tidak support STOP_MARKET, jadi pakai STOP_LOSS_LIMIT
+            $params = [
+                'stopPrice' => $stopPrice,
+                'price' => $stopPrice * 0.995, // Slightly below stop price for execution
+                'timeInForce' => 'GTC'
+            ];
             
-            return $order['orderId'] ?? null;
+            $order = $binance->order($symbol, $side, $quantity, 0, "STOP_LOSS_LIMIT", $params);
+            
+            return $order['orderId'] ?? $order['clientOrderId'] ?? null;
             
         } catch (\Exception $e) {
-            Log::warning("Stop loss order failed (non-critical): " . $e->getMessage());
+            Log::warning("Stop loss order failed: " . $e->getMessage());
             return null;
         }
     }
     
     /**
-     * ✅ Place TAKE PROFIT order
+     * ✅ Place TAKE PROFIT order (jaggedsoft/php-binance-api)
      */
     private function placeTakeProfitOrder($binance, string $symbol, string $positionType, float $quantity, float $takeProfitPrice): ?string
     {
         try {
             $side = $positionType === 'LONG' ? 'SELL' : 'BUY';
             
-            $order = $binance->futuresOrder(
-                $side,
-                $symbol,
-                $quantity,
-                $takeProfitPrice,
-                'LIMIT',
-                [
-                    'timeInForce' => 'GTC',
-                    'reduceOnly' => 'true'
-                ]
-            );
+            // Untuk jaggedsoft/php-binance-api dengan TAKE_PROFIT_LIMIT
+            $params = [
+                'stopPrice' => $takeProfitPrice,
+                'timeInForce' => 'GTC'
+            ];
             
-            return $order['orderId'] ?? null;
+            $order = $binance->order($symbol, $side, $quantity, $takeProfitPrice, "TAKE_PROFIT_LIMIT", $params);
+            
+            return $order['orderId'] ?? $order['clientOrderId'] ?? null;
             
         } catch (\Exception $e) {
-            Log::warning("Take profit order failed (non-critical): " . $e->getMessage());
+            Log::warning("Take profit order failed: " . $e->getMessage());
             return null;
         }
     }
@@ -653,9 +696,51 @@ class RealTradingExecutionService
             'amount' => $positionSize['amount'],
             'expires_at' => $expiresAt,
             'status' => 'PENDING',
-            'notes' => "Auto-cancels at {$expiresAt->format('H:i:s')} - All orders for this symbol will be cancelled"
+            'notes' => "Auto-cancels at {$expiresAt->format('H:i:s')}"
         ]);
     }
+    
+    /**
+     * ✅ Save real order ke database
+     */
+    private function saveRealOrder(
+        int $userId,
+        AiDecision $decision,
+        string $positionType,
+        array $positionSize,
+        string $mainOrderId,
+        ?string $stopLossOrderId,
+        ?string $takeProfitOrderId,
+        float $stopLossPrice,
+        float $takeProfitPrice
+    ) {
+        // Cek dulu apakah model RealOrder ada
+        if (!class_exists('App\Models\RealOrder')) {
+            return null;
+        }
+        
+        try {
+            return RealOrder::create([
+                'user_id' => $userId,
+                'ai_decision_id' => $decision->id,
+                'symbol' => $decision->symbol,
+                'binance_order_id' => $mainOrderId,
+                'order_type' => 'LIMIT',
+                'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
+                'quantity' => $positionSize['quantity'],
+                'price' => $decision->price,
+                'stop_loss_price' => $stopLossPrice,
+                'take_profit_price' => $takeProfitPrice,
+                'amount' => $positionSize['amount'],
+                'status' => 'NEW',
+                'notes' => 'Real trade executed via AI decision'
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("Failed to save real order: " . $e->getMessage());
+            return null;
+        }
+    }
+    
     /**
      * ✅ Update user trade cache setelah trade executed
      */
@@ -676,9 +761,8 @@ class RealTradingExecutionService
         }
     }
     
-
     /**
-     * ✅ METHOD: Check pending orders yang expired (UPDATED)
+     * ✅ METHOD: Check pending orders yang expired
      */
     public function checkPendingOrders(): array
     {
@@ -695,19 +779,19 @@ class RealTradingExecutionService
             // Get orders yang sudah expired
             $expiredOrders = PendingOrder::where('status', 'PENDING')
                 ->where('expires_at', '<=', now())
+                ->with('user')
                 ->get();
             
             $results['checked'] = $expiredOrders->count();
             
             foreach ($expiredOrders as $order) {
                 try {
-                    // Cancel semua orders untuk symbol ini
-                    $cancellationResult = $this->cancelExpiredOrderWithSLTP($order);
+                    // Cancel order
+                    $cancellationResult = $this->cancelExpiredOrder($order);
                     
                     if ($cancellationResult) {
                         $results['cancelled_all']++;
                         
-                        // Log detail cancellation
                         Log::info("📝 Order cancellation completed", [
                             'order_id' => $order->id,
                             'user_id' => $order->user_id,
@@ -733,76 +817,76 @@ class RealTradingExecutionService
             return $results;
         }
     }
+    
     /**
-     * ✅ Cancel expired order beserta SEMUA orders untuk symbol yang sama
+     * ✅ Cancel expired order
      */
-    private function cancelExpiredOrderWithSLTP(PendingOrder $order): bool
+    private function cancelExpiredOrder(PendingOrder $order): bool
     {
+        DB::beginTransaction();
+        
         try {
             $binance = $this->binanceAccountService->getBinanceInstance($order->user_id);
+            
+            if (!$binance) {
+                throw new \Exception("Failed to get Binance instance");
+            }
+            
             $cancelledOrders = [];
             
-            // 1. Cancel ALL open orders untuk symbol ini (termasuk main, SL, TP)
-            try {
-                // Cancel semua orders untuk symbol ini
-                $cancelAllResponse = $binance->futuresCancelAll($order->symbol);
-                
-                Log::info("✅ Cancelled ALL orders for symbol {$order->symbol}", [
-                    'user_id' => $order->user_id,
-                    'symbol' => $order->symbol,
-                    'response' => $cancelAllResponse
-                ]);
-                
-                $cancelledOrders[] = 'all_orders';
-                
-            } catch (\Exception $e) {
-                Log::warning("Failed to cancel all orders for {$order->symbol}: " . $e->getMessage());
-                
-                // Fallback: Cancel orders satu per satu
-                $ordersToCancel = [];
-                
-                if ($order->binance_order_id) {
-                    $ordersToCancel[] = ['id' => $order->binance_order_id, 'type' => 'main'];
-                }
-                if ($order->sl_order_id) {
-                    $ordersToCancel[] = ['id' => $order->sl_order_id, 'type' => 'stop_loss'];
-                }
-                if ($order->take_profit_order_id) {
-                    $ordersToCancel[] = ['id' => $order->take_profit_order_id, 'type' => 'take_profit'];
-                }
-                
-                // Juga coba cancel orders lain yang mungkin ada
+            // Cancel main order
+            if ($order->binance_order_id) {
                 try {
-                    $openOrders = $binance->futuresOpenOrders($order->symbol);
-                    foreach ($openOrders as $openOrder) {
-                        $ordersToCancel[] = ['id' => $openOrder['orderId'], 'type' => 'other'];
-                    }
-                } catch (\Exception $openOrdersError) {
-                    // Ignore jika gagal fetch open orders
-                }
-                
-                // Cancel satu per satu
-                foreach ($ordersToCancel as $orderToCancel) {
-                    try {
-                        $binance->futuresCancel($order->symbol, $orderToCancel['id']);
-                        $cancelledOrders[] = $orderToCancel['type'];
-                    } catch (\Exception $cancelError) {
-                        // Order mungkin sudah filled atau cancelled
-                    }
+                    $binance->cancel($order->symbol, $order->binance_order_id);
+                    $cancelledOrders[] = 'main';
+                } catch (\Exception $e) {
+                    Log::warning("Failed to cancel main order: " . $e->getMessage());
                 }
             }
             
-            // 2. Update order status di database
+            // Cancel stop loss order
+            if ($order->sl_order_id) {
+                try {
+                    $binance->cancel($order->symbol, $order->sl_order_id);
+                    $cancelledOrders[] = 'stop_loss';
+                } catch (\Exception $e) {
+                    // Order mungkin sudah filled atau cancelled
+                }
+            }
+            
+            // Cancel take profit order
+            if ($order->take_profit_order_id) {
+                try {
+                    $binance->cancel($order->symbol, $order->take_profit_order_id);
+                    $cancelledOrders[] = 'take_profit';
+                } catch (\Exception $e) {
+                    // Order mungkin sudah filled atau cancelled
+                }
+            }
+            
+            // Update order status di database
             $order->update([
                 'status' => 'CANCELLED',
                 'cancelled_at' => now(),
-                'notes' => 'Automatically cancelled after expiry. Cancelled orders: ' . implode(', ', array_unique($cancelledOrders))
+                'notes' => 'Automatically cancelled after expiry. Cancelled orders: ' . implode(', ', $cancelledOrders)
             ]);
             
-            // 3. Invalidate user cache
+            // Update real order jika ada
+            if (class_exists('App\Models\RealOrder')) {
+                RealOrder::where('user_id', $order->user_id)
+                    ->where('binance_order_id', $order->binance_order_id)
+                    ->update([
+                        'status' => 'CANCELLED',
+                        'cancelled_at' => now()
+                    ]);
+            }
+            
+            // Invalidate user cache
             $this->tradingCache->invalidateUserCache($order->user_id);
             
-            Log::info("✅ Order {$order->id} cancelled with all related orders", [
+            DB::commit();
+            
+            Log::info("✅ Order {$order->id} cancelled", [
                 'user_id' => $order->user_id,
                 'symbol' => $order->symbol,
                 'cancelled_orders' => $cancelledOrders
@@ -811,7 +895,9 @@ class RealTradingExecutionService
             return true;
             
         } catch (\Exception $e) {
-            Log::error("❌ Failed to cancel order {$order->id} with SL/TP: " . $e->getMessage());
+            DB::rollBack();
+            
+            Log::error("❌ Failed to cancel order {$order->id}: " . $e->getMessage());
             
             // Update status meskipun cancel gagal
             $order->update([
@@ -823,194 +909,20 @@ class RealTradingExecutionService
             return false;
         }
     }
-
     
     /**
-     * ✅ METHOD: Add stop loss to filled orders
-     */
-    public function addStopLossToFilledOrders($userId = null): array
-    {
-        Log::info("🔧 Adding stop loss to filled orders", ['user_id' => $userId]);
-        
-        $results = [
-            'total_checked' => 0,
-            'stop_loss_added' => 0,
-            'failed' => 0
-        ];
-        
-        try {
-            $query = PendingOrder::where('status', 'FILLED')
-                ->whereNull('sl_order_id')
-                ->whereNotNull('binance_order_id');
-            
-            if ($userId) {
-                $query->where('user_id', $userId);
-            }
-            
-            $query->chunk(50, function ($orders) use (&$results) {
-                foreach ($orders as $order) {
-                    $results['total_checked']++;
-                    
-                    try {
-                        if ($this->addStopLossToFilledOrder($order)) {
-                            $results['stop_loss_added']++;
-                        }
-                    } catch (\Exception $e) {
-                        Log::error("Failed to add stop loss to order {$order->id}: " . $e->getMessage());
-                        $results['failed']++;
-                    }
-                }
-            });
-            
-            Log::info("✅ Stop loss addition completed", $results);
-            
-            return $results;
-            
-        } catch (\Exception $e) {
-            Log::error("❌ Add stop loss to filled orders failed: " . $e->getMessage());
-            return $results;
-        }
-    }
-    
-    /**
-     * ✅ Add stop loss to single filled order
-     */
-    private function addStopLossToFilledOrder(PendingOrder $order): bool
-    {
-        try {
-            $binance = $this->binanceAccountService->getBinanceInstance($order->user_id);
-            
-            // Calculate stop loss price
-            $stopLossPrice = $this->calculateStopLossPrice(
-                $order->limit_price ?? $order->avg_price ?? $order->executed_price,
-                $order->position_type
-            );
-            
-            $stopLossSide = $order->side === 'BUY' ? 'SELL' : 'BUY';
-            
-            // Place stop loss order
-            $stopLossOrder = $binance->futuresOrder(
-                $stopLossSide,
-                $order->symbol,
-                $order->quantity,
-                0, // Price 0 untuk STOP_MARKET
-                'STOP_MARKET',
-                [
-                    'stopPrice' => $stopLossPrice,
-                    'closePosition' => 'true',
-                    'reduceOnly' => 'true'
-                ]
-            );
-            
-            if (!isset($stopLossOrder['orderId'])) {
-                throw new \Exception("Stop loss order failed: " . json_encode($stopLossOrder));
-            }
-            
-            // Update order
-            $order->update([
-                'sl_order_id' => $stopLossOrder['orderId'],
-                'stop_loss_price' => $stopLossPrice,
-                'notes' => $order->notes . " | Stop loss added post-fill"
-            ]);
-            
-            return true;
-            
-        } catch (\Exception $e) {
-            throw $e;
-        }
-    }
-    
-    /**
-     * ✅ METHOD: Get trading statistics
-     */
-    public function getTradingStatistics($userId = null): array
-    {
-        $stats = [
-            'total_users' => 0,
-            'active_traders' => 0,
-            'total_pending_orders' => 0,
-            'total_open_positions' => 0,
-            'cache_stats' => [],
-            'rate_limits' => []
-        ];
-        
-        try {
-            // User statistics
-            $stats['total_users'] = User::count();
-            $stats['active_traders'] = User::whereHas('portfolio', function($q) {
-                $q->where('real_trading_enabled', true)
-                  ->where('real_trading_active', true);
-            })->count();
-            
-            // Order statistics
-            $stats['total_pending_orders'] = PendingOrder::whereIn('status', ['PENDING', 'PARTIALLY_FILLED'])->count();
-            $stats['total_open_positions'] = PendingOrder::where('status', 'FILLED')->count();
-            
-            // Cache statistics
-            $stats['cache_stats'] = $this->tradingCache->getStats();
-            
-            // Rate limit stats (contoh)
-            $stats['rate_limits'] = [
-                'max_trades_per_minute' => $this->maxTradesPerMinute,
-                'batch_size' => $this->batchSize,
-                'max_users_per_batch' => $this->maxUsersPerBatch
-            ];
-            
-        } catch (\Exception $e) {
-            Log::error("Failed to get trading statistics: " . $e->getMessage());
-        }
-        
-        return $stats;
-    }
-    
-    /**
-     * ✅ METHOD: Force refresh user data
-     */
-    public function forceRefreshUserData($userId): array
-    {
-        try {
-            // Invalidate semua cache user
-            $this->tradingCache->invalidateUserCache($userId);
-            
-            // Dispatch refresh job dengan high priority
-            RefreshUserDataJob::dispatch($userId)
-                ->onQueue('trading')
-                ->delay(now()->addSeconds(1));
-            
-            // Dispatch sync orders job
-            SyncPendingOrdersJob::dispatch($userId)
-                ->delay(now()->addSeconds(5));
-            
-            return [
-                'success' => true,
-                'message' => 'User data refresh initiated',
-                'user_id' => $userId,
-                'jobs_dispatched' => 2
-            ];
-            
-        } catch (\Exception $e) {
-            Log::error("Force refresh failed for user {$userId}: " . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => 'Refresh failed: ' . $e->getMessage(),
-                'user_id' => $userId
-            ];
-        }
-    }
-    
-    /**
-     * ✅ HELPER: Set leverage
+     * ✅ HELPER: Set leverage (untuk futures)
      */
     private function setLeverage($binance, $symbol, $leverage)
     {
         try {
+            // Untuk futures trading dengan jaggedsoft/php-binance-api
             if (method_exists($binance, 'futures_change_leverage')) {
                 $binance->futures_change_leverage($symbol, $leverage);
-            } elseif (method_exists($binance, 'change_leverage')) {
-                $binance->change_leverage($symbol, $leverage);
+                Log::info("Leverage set to {$leverage}x for {$symbol}");
             }
         } catch (\Exception $e) {
-            Log::warning("Leverage setting failed: " . $e->getMessage());
+            Log::warning("Leverage setting failed (might be spot trading): " . $e->getMessage());
         }
     }
     
@@ -1022,9 +934,9 @@ class RealTradingExecutionService
         $percentage = $this->stopLossPercentage / 100;
         
         if ($positionType === 'LONG') {
-            return $entryPrice * (1 - $percentage);
+            return round($entryPrice * (1 - $percentage), 6);
         } else {
-            return $entryPrice * (1 + $percentage);
+            return round($entryPrice * (1 + $percentage), 6);
         }
     }
     
@@ -1036,9 +948,9 @@ class RealTradingExecutionService
         $percentage = $this->takeProfitPercentage / 100;
         
         if ($positionType === 'LONG') {
-            return $entryPrice * (1 + $percentage);
+            return round($entryPrice * (1 + $percentage), 6);
         } else {
-            return $entryPrice * (1 - $percentage);
+            return round($entryPrice * (1 - $percentage), 6);
         }
     }
     
@@ -1047,6 +959,57 @@ class RealTradingExecutionService
      */
     private function getPositionTypeFromAction($action): string
     {
-        return $action === 'BUY' ? 'LONG' : 'SHORT';
+        return strtoupper($action) === 'BUY' ? 'LONG' : 'SHORT';
+    }
+    
+    /**
+     * ✅ METHOD: Get trading statistics
+     */
+    public function getTradingStatistics(): array
+    {
+        try {
+            $stats = [
+                'total_users' => User::count(),
+                'active_traders' => User::whereHas('portfolio', function($q) {
+                    $q->where('real_trading_enabled', true)
+                      ->where('real_trading_active', true);
+                })->count(),
+                'total_pending_orders' => PendingOrder::whereIn('status', ['PENDING', 'PARTIALLY_FILLED'])->count(),
+                'total_real_orders' => class_exists('App\Models\RealOrder') ? RealOrder::count() : 0,
+                'filled_orders' => class_exists('App\Models\RealOrder') ? RealOrder::where('status', 'FILLED')->count() : 0,
+                'cache_stats' => $this->tradingCache->getStats() ?? []
+            ];
+            
+            return $stats;
+            
+        } catch (\Exception $e) {
+            Log::error("Failed to get trading statistics: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * ✅ METHOD: Force refresh user data
+     */
+    public function forceRefreshUserData($userId): array
+    {
+        try {
+            // Invalidate semua cache user
+            $this->tradingCache->invalidateUserCache($userId);
+            
+            return [
+                'success' => true,
+                'message' => 'User data cache invalidated',
+                'user_id' => $userId
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error("Force refresh failed for user {$userId}: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => 'Refresh failed: ' . $e->getMessage(),
+                'user_id' => $userId
+            ];
+        }
     }
 }

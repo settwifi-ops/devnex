@@ -8,7 +8,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Models\AiDecision;
-use App\Services\TradingExecutionService;
+use App\Models\User;
+use App\Services\RealTradingExecutionService; // Ganti ke service yang benar
 use Throwable;
 use Illuminate\Support\Facades\Log;
 
@@ -17,70 +18,146 @@ class ExecuteTradingDecisionJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $decisionId;
+    public $userIds; // Tambahkan property untuk user IDs
     public $tries = 3;
-    public $timeout = 60;
+    public $timeout = 300; // Perpanjang timeout untuk trading
     public $backoff = [30, 60, 120];
     public $maxExceptions = 3;
 
-    public function __construct($decisionId)
+    /**
+     * Create a new job instance.
+     */
+    public function __construct($decisionId, $userIds = [])
     {
         $this->decisionId = $decisionId;
+        $this->userIds = is_array($userIds) ? $userIds : [];
     }
 
-    public function handle(TradingExecutionService $executionService)
+    /**
+     * Execute the job.
+     */
+    public function handle(RealTradingExecutionService $executionService)
     {
         try {
-            // AMBIL DATA AI DECISION TANPA EAGER LOADING
-            $decision = AiDecision::findOrFail($this->decisionId);
-            
-            Log::info('Processing trading decision', [
+            Log::info('🎯 Starting ExecuteTradingDecisionJob', [
                 'job_id' => $this->job->getJobId(),
                 'decision_id' => $this->decisionId,
-                'decision_type' => $decision->decision_type,
-                'status' => $decision->status
+                'user_ids' => $this->userIds
             ]);
 
-            if ($decision->executed) {
-                Log::warning('Decision already executed', [
+            // 1. Load AI Decision TANPA eager loading yang salah
+            $decision = AiDecision::findOrFail($this->decisionId);
+            
+            Log::info('📊 AI Decision loaded', [
+                'decision_id' => $decision->id,
+                'symbol' => $decision->symbol,
+                'action' => $decision->action,
+                'price' => $decision->price,
+                'confidence' => $decision->confidence_score
+            ]);
+
+            // 2. Validasi decision
+            $this->validateDecision($decision);
+
+            // 3. Cek apakah decision sudah dieksekusi
+            if ($decision->executed_at) {
+                Log::warning('⚠️ Decision already executed', [
                     'decision_id' => $this->decisionId,
                     'executed_at' => $decision->executed_at
                 ]);
-                return;
+                return [
+                    'success' => false,
+                    'message' => 'Decision already executed',
+                    'executed_at' => $decision->executed_at
+                ];
             }
 
-            if ($decision->status === 'cancelled') {
-                Log::warning('Decision is cancelled', [
-                    'decision_id' => $this->decisionId
+            // 4. Jika ada user IDs spesifik, execute untuk user tersebut
+            if (!empty($this->userIds)) {
+                Log::info('👤 Executing for specific users', [
+                    'user_count' => count($this->userIds)
                 ]);
-                return;
+                
+                $results = [];
+                foreach ($this->userIds as $userId) {
+                    try {
+                        $user = User::with(['portfolio', 'binanceAccounts'])->find($userId);
+                        
+                        if (!$user) {
+                            Log::warning('User not found', ['user_id' => $userId]);
+                            continue;
+                        }
+                        
+                        $result = $executionService->executeForUser($user, $decision);
+                        $results[] = $result;
+                        
+                        Log::info("Trade executed for user {$userId}", [
+                            'success' => $result['success'] ?? false,
+                            'order_id' => $result['order_id'] ?? null
+                        ]);
+                        
+                    } catch (\Exception $e) {
+                        Log::error("Failed to execute for user {$userId}: " . $e->getMessage());
+                        $results[] = [
+                            'user_id' => $userId,
+                            'success' => false,
+                            'error' => $e->getMessage()
+                        ];
+                    }
+                }
+                
+                // Update decision status
+                $decision->update([
+                    'executed_at' => now(),
+                    'execution_count' => $decision->execution_count + 1
+                ]);
+                
+                return [
+                    'success' => true,
+                    'message' => 'Executed for specific users',
+                    'results' => $results
+                ];
             }
-
-            // Validasi data sebelum eksekusi
-            $this->validateDecision($decision);
-
-            // Eksekusi trading
-            $result = $executionService->executeDecision($decision);
             
-            Log::info('Trading decision executed successfully', [
+            // 5. Jika tidak ada user IDs, execute untuk semua eligible users
+            Log::info('🚀 Executing real trade for all eligible users', [
+                'symbol' => $decision->symbol,
+                'action' => $decision->action
+            ]);
+            
+            $result = $executionService->executeRealTrade($decision);
+            
+            // Update decision status
+            if ($result['success'] ?? false) {
+                $decision->update([
+                    'executed_at' => now(),
+                    'execution_count' => $decision->execution_count + 1,
+                    'notes' => "Executed for " . ($result['total_users'] ?? 0) . " users"
+                ]);
+            }
+            
+            Log::info('✅ Trading decision executed', [
                 'decision_id' => $this->decisionId,
                 'result' => $result
             ]);
+            
+            return $result;
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::error('Decision not found', [
+            Log::error('❌ Decision not found', [
                 'decision_id' => $this->decisionId,
                 'error' => $e->getMessage()
             ]);
             throw $e;
         } catch (\Illuminate\Database\QueryException $e) {
-            Log::error('Database error in trading job', [
+            Log::error('❌ Database error in trading job', [
                 'decision_id' => $this->decisionId,
                 'error' => $e->getMessage(),
                 'code' => $e->getCode()
             ]);
             throw $e;
         } catch (\Exception $e) {
-            Log::error('Unexpected error in trading job', [
+            Log::error('❌ Unexpected error in trading job', [
                 'decision_id' => $this->decisionId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -90,85 +167,89 @@ class ExecuteTradingDecisionJob implements ShouldQueue
     }
 
     /**
-     * Validasi data decision sebelum eksekusi
-     * SESUAIKAN DENGAN FIELD YANG ADA DI TABEL ai_decisions
+     * Validasi data decision
      */
-    private function validateDecision(AiDecision $decision)
+    private function validateDecision(AiDecision $decision): void
     {
-        // SESUAIKAN DENGAN FIELD YANG SEBENARNYA ADA
-        // Contoh field yang mungkin ada di AiDecision:
+        // Validasi field yang diperlukan untuk trading
         $requiredFields = [
-            'decision_type',
-            'confidence_level',
-            'signal_strength',
-            'symbol', // jika ada field symbol untuk trading pair
-            'volume', // jika ada field volume
-            'price',  // jika ada field price
+            'symbol' => 'Symbol',
+            'action' => 'Action',
+            'price' => 'Price'
         ];
 
-        foreach ($requiredFields as $field) {
+        foreach ($requiredFields as $field => $label) {
             if (empty($decision->$field)) {
-                throw new \InvalidArgumentException("Field {$field} is required for decision execution");
+                throw new \InvalidArgumentException("{$label} is required for trading decision");
             }
         }
 
-        // Validasi tipe decision
-        $validDecisionTypes = ['buy', 'sell', 'hold', 'close'];
-        if (!in_array(strtolower($decision->decision_type), $validDecisionTypes)) {
-            throw new \InvalidArgumentException("Invalid decision type: {$decision->decision_type}");
+        // Validasi action
+        $validActions = ['BUY', 'SELL', 'buy', 'sell'];
+        if (!in_array(strtoupper($decision->action), $validActions)) {
+            throw new \InvalidArgumentException("Invalid action: {$decision->action}. Must be BUY or SELL");
         }
 
-        // Validasi confidence level
-        if ($decision->confidence_level < 0 || $decision->confidence_level > 1) {
-            throw new \InvalidArgumentException("Confidence level must be between 0 and 1");
-        }
-
-        // Tambahkan validasi lain sesuai kebutuhan
-        if (isset($decision->volume) && $decision->volume <= 0) {
-            throw new \InvalidArgumentException("Volume must be greater than 0");
-        }
-
-        if (isset($decision->price) && $decision->price <= 0) {
+        // Validasi price
+        if ($decision->price <= 0) {
             throw new \InvalidArgumentException("Price must be greater than 0");
         }
+
+        // Validasi symbol format
+        if (!str_contains($decision->symbol, 'USDT')) {
+            Log::warning("Symbol may not be correct format: {$decision->symbol}");
+        }
+
+        Log::info('✅ Decision validation passed', [
+            'symbol' => $decision->symbol,
+            'action' => $decision->action,
+            'price' => $decision->price
+        ]);
     }
 
     /**
      * Handle job failure
      */
-    public function failed(Throwable $exception)
+    public function failed(Throwable $exception): void
     {
         try {
-            Log::critical('ExecuteTradingDecisionJob failed', [
+            Log::critical('💥 ExecuteTradingDecisionJob failed', [
                 'decision_id' => $this->decisionId,
+                'user_ids' => $this->userIds,
                 'job_id' => $this->job ? $this->job->getJobId() : 'unknown',
                 'exception' => get_class($exception),
                 'message' => $exception->getMessage(),
                 'file' => $exception->getFile(),
                 'line' => $exception->getLine(),
-                'trace' => $exception->getTraceAsString(),
                 'attempts' => $this->attempts(),
                 'failed_at' => now()->toISOString()
             ]);
 
+            // Update decision status jika ada
             $decision = AiDecision::find($this->decisionId);
             if ($decision) {
                 $decision->update([
-                    'status' => 'failed',
-                    'error_message' => substr($exception->getMessage(), 0, 255),
-                    'executed_at' => now(),
+                    'execution_status' => 'FAILED',
+                    'error_message' => substr($exception->getMessage(), 0, 500),
+                    'last_error_at' => now(),
                     'execution_attempts' => $this->attempts()
                 ]);
 
-                Log::info('Decision marked as failed', [
+                Log::info('📝 Decision marked as FAILED', [
                     'decision_id' => $this->decisionId,
-                    'status' => 'failed'
+                    'status' => 'FAILED'
                 ]);
             }
-            
+
+            // TODO: Add notification system here
+            // Example: Notification::send($adminUsers, new TradingJobFailed($this->decisionId, $exception));
+
         } catch (Throwable $e) {
-            error_log('Critical error in failed handler: ' . $e->getMessage());
-            error_log('Original error: ' . $exception->getMessage());
+            // Fallback logging jika ada error dalam failed handler
+            Log::emergency('🔥 Critical error in failed handler', [
+                'original_error' => $exception->getMessage(),
+                'handler_error' => $e->getMessage()
+            ]);
         }
     }
 
@@ -177,7 +258,7 @@ class ExecuteTradingDecisionJob implements ShouldQueue
      */
     public function retryUntil()
     {
-        return now()->addMinutes(5);
+        return now()->addMinutes(10); // Perpanjang untuk trading
     }
 
     /**
@@ -186,5 +267,25 @@ class ExecuteTradingDecisionJob implements ShouldQueue
     public function backoff()
     {
         return $this->backoff;
+    }
+
+    /**
+     * Get the display name for the job
+     */
+    public function displayName(): string
+    {
+        return "Execute Trading Decision #{$this->decisionId}";
+    }
+
+    /**
+     * Get the tags for the job
+     */
+    public function tags(): array
+    {
+        return [
+            'trading',
+            'decision:' . $this->decisionId,
+            'symbol:' . (AiDecision::find($this->decisionId)->symbol ?? 'unknown')
+        ];
     }
 }
