@@ -699,6 +699,7 @@ class RealTradingPage extends Component
                         'symbol' => $order->symbol,
                         'orderId' => $order->binance_order_id
                     ]);
+                   
                     
                     $orderStatus = $binanceStatus['status'] ?? 'UNKNOWN';
                     $executedQty = $binanceStatus['executedQty'] ?? 0;
@@ -905,10 +906,11 @@ class RealTradingPage extends Component
             $binance = $binanceService->getBinanceInstance($this->user->id);
             
             // Get order status from Binance
-            $orderStatus = $binance->futuresGetOrder([
-                'symbol' => $order->symbol,
-                'orderId' => $order->binance_order_id
-            ]);
+            $orderStatus = $binance->futuresOrderStatus(
+                $order->symbol,
+                ['orderId' => $order->binance_order_id]
+            );
+
             
             // Update local status
             $order->update([
