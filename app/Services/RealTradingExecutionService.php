@@ -311,7 +311,7 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Execute trade dengan Stop Loss & Take Profit
+     * ✅ Execute trade dengan Stop Loss & Take Profit - WITH COMPLETE CANCELLATION
      */
     private function executeTradeWithSLTP(User $user, AiDecision $decision): array
     {
@@ -319,21 +319,32 @@ class RealTradingExecutionService
             // 1. Get Binance instance
             $binance = $this->binanceAccountService->getBinanceInstance($user->id);
             
-            // 2. Get balance (gunakan cache atau fetch)
+            // 2. Get balance
             $balance = $this->getUserBalance($user->id, $binance);
             
             // 3. Calculate position size
+            $positionType = $this->getPositionTypeFromAction($decision->action);
             $positionSize = $this->calculatePositionSize($balance, $decision->price);
             
             // 4. Set leverage
             $this->setLeverage($binance, $decision->symbol, $this->leverage);
             
             // 5. Calculate SL/TP prices
-            $positionType = $this->getPositionTypeFromAction($decision->action);
             $stopLossPrice = $this->calculateStopLossPrice($decision->price, $positionType);
             $takeProfitPrice = $this->calculateTakeProfitPrice($decision->price, $positionType);
             
-            // 6. Place LIMIT order
+            Log::info("📊 Trading parameters for user {$user->id}", [
+                'symbol' => $decision->symbol,
+                'position_type' => $positionType,
+                'entry_price' => $decision->price,
+                'quantity' => $positionSize['quantity'],
+                'stop_loss' => $stopLossPrice,
+                'take_profit' => $takeProfitPrice,
+                'leverage' => $this->leverage,
+                'expires_in' => "{$this->orderExpiryMinutes} minutes"
+            ]);
+            
+            // 6. Place MAIN LIMIT order
             $order = $this->placeLimitOrder(
                 $binance, 
                 $decision->symbol, 
@@ -366,7 +377,7 @@ class RealTradingExecutionService
                 $takeProfitPrice
             );
             
-            // 9. Save to database
+            // 9. Save to database dengan status yang benar
             $pendingOrder = $this->savePendingOrder(
                 $user->id,
                 $decision,
@@ -383,7 +394,9 @@ class RealTradingExecutionService
                 'symbol' => $decision->symbol,
                 'order_id' => $mainOrderId,
                 'amount' => $positionSize['amount'],
-                'quantity' => $positionSize['quantity']
+                'quantity' => $positionSize['quantity'],
+                'sl_order_id' => $stopLossOrderId,
+                'tp_order_id' => $takeProfitOrderId
             ]);
             
             return [
@@ -398,7 +411,8 @@ class RealTradingExecutionService
                 'stop_loss' => $stopLossPrice,
                 'take_profit' => $takeProfitPrice,
                 'sl_order_id' => $stopLossOrderId,
-                'take_profit_order_id' => $takeProfitOrderId
+                'tp_order_id' => $takeProfitOrderId,
+                'expires_at' => $pendingOrder->expires_at->format('Y-m-d H:i:s')
             ];
             
         } catch (\Exception $e) {
@@ -608,7 +622,7 @@ class RealTradingExecutionService
     }
     
     /**
-     * ✅ Save pending order ke database
+     * ✅ Save pending order dengan expiration yang jelas
      */
     private function savePendingOrder(
         int $userId,
@@ -621,6 +635,8 @@ class RealTradingExecutionService
         float $stopLossPrice,
         float $takeProfitPrice
     ) {
+        $expiresAt = now()->addMinutes($this->orderExpiryMinutes);
+        
         return PendingOrder::create([
             'user_id' => $userId,
             'ai_decision_id' => $decision->id,
@@ -635,12 +651,11 @@ class RealTradingExecutionService
             'side' => $positionType === 'LONG' ? 'BUY' : 'SELL',
             'position_type' => $positionType,
             'amount' => $positionSize['amount'],
-            'expires_at' => now()->addMinutes($this->orderExpiryMinutes),
+            'expires_at' => $expiresAt,
             'status' => 'PENDING',
-            'notes' => "Risk: {$positionSize['risk_percentage']}%, SL: {$this->stopLossPercentage}%, TP: {$this->takeProfitPercentage}%"
+            'notes' => "Auto-cancels at {$expiresAt->format('H:i:s')} - All orders for this symbol will be cancelled"
         ]);
     }
-    
     /**
      * ✅ Update user trade cache setelah trade executed
      */
@@ -661,37 +676,53 @@ class RealTradingExecutionService
         }
     }
     
+
     /**
-     * ✅ METHOD: Check pending orders yang expired
+     * ✅ METHOD: Check pending orders yang expired (UPDATED)
      */
     public function checkPendingOrders(): array
     {
-        Log::info("🕒 Checking expired pending orders");
+        Log::info("🕒 Checking expired pending orders for cancellation");
         
         $results = [
-            'expired' => 0,
-            'cancelled' => 0,
+            'checked' => 0,
+            'cancelled_all' => 0,
+            'partially_cancelled' => 0,
             'failed' => 0
         ];
         
         try {
-            // Get expired orders dengan chunking
+            // Get orders yang sudah expired
             $expiredOrders = PendingOrder::where('status', 'PENDING')
                 ->where('expires_at', '<=', now())
-                ->chunk(100, function ($orders) use (&$results) {
-                    foreach ($orders as $order) {
-                        try {
-                            if ($this->cancelExpiredOrderWithSLTP($order)) {
-                                $results['cancelled']++;
-                            }
-                        } catch (\Exception $e) {
-                            Log::error("Failed to cancel order {$order->id}: " . $e->getMessage());
-                            $results['failed']++;
-                        }
-                    }
-                });
+                ->get();
             
-            $results['expired'] = $results['cancelled'] + $results['failed'];
+            $results['checked'] = $expiredOrders->count();
+            
+            foreach ($expiredOrders as $order) {
+                try {
+                    // Cancel semua orders untuk symbol ini
+                    $cancellationResult = $this->cancelExpiredOrderWithSLTP($order);
+                    
+                    if ($cancellationResult) {
+                        $results['cancelled_all']++;
+                        
+                        // Log detail cancellation
+                        Log::info("📝 Order cancellation completed", [
+                            'order_id' => $order->id,
+                            'user_id' => $order->user_id,
+                            'symbol' => $order->symbol,
+                            'expired_at' => $order->expires_at
+                        ]);
+                    } else {
+                        $results['failed']++;
+                    }
+                    
+                } catch (\Exception $e) {
+                    Log::error("Failed to process order {$order->id}: " . $e->getMessage());
+                    $results['failed']++;
+                }
+            }
             
             Log::info("✅ Checked expired orders", $results);
             
@@ -702,67 +733,97 @@ class RealTradingExecutionService
             return $results;
         }
     }
-    
     /**
-     * ✅ Cancel expired order beserta SL/TP orders
+     * ✅ Cancel expired order beserta SEMUA orders untuk symbol yang sama
      */
     private function cancelExpiredOrderWithSLTP(PendingOrder $order): bool
     {
         try {
             $binance = $this->binanceAccountService->getBinanceInstance($order->user_id);
-            $cancelled = [];
+            $cancelledOrders = [];
             
-            // Cancel main order
-            if ($order->binance_order_id) {
+            // 1. Cancel ALL open orders untuk symbol ini (termasuk main, SL, TP)
+            try {
+                // Cancel semua orders untuk symbol ini
+                $cancelAllResponse = $binance->futuresCancelAll($order->symbol);
+                
+                Log::info("✅ Cancelled ALL orders for symbol {$order->symbol}", [
+                    'user_id' => $order->user_id,
+                    'symbol' => $order->symbol,
+                    'response' => $cancelAllResponse
+                ]);
+                
+                $cancelledOrders[] = 'all_orders';
+                
+            } catch (\Exception $e) {
+                Log::warning("Failed to cancel all orders for {$order->symbol}: " . $e->getMessage());
+                
+                // Fallback: Cancel orders satu per satu
+                $ordersToCancel = [];
+                
+                if ($order->binance_order_id) {
+                    $ordersToCancel[] = ['id' => $order->binance_order_id, 'type' => 'main'];
+                }
+                if ($order->sl_order_id) {
+                    $ordersToCancel[] = ['id' => $order->sl_order_id, 'type' => 'stop_loss'];
+                }
+                if ($order->take_profit_order_id) {
+                    $ordersToCancel[] = ['id' => $order->take_profit_order_id, 'type' => 'take_profit'];
+                }
+                
+                // Juga coba cancel orders lain yang mungkin ada
                 try {
-                    $binance->futuresCancel($order->symbol, $order->binance_order_id);
-                    $cancelled[] = 'main';
-                } catch (\Exception $e) {
-                    // Order mungkin sudah filled atau cancelled
+                    $openOrders = $binance->futuresOpenOrders($order->symbol);
+                    foreach ($openOrders as $openOrder) {
+                        $ordersToCancel[] = ['id' => $openOrder['orderId'], 'type' => 'other'];
+                    }
+                } catch (\Exception $openOrdersError) {
+                    // Ignore jika gagal fetch open orders
+                }
+                
+                // Cancel satu per satu
+                foreach ($ordersToCancel as $orderToCancel) {
+                    try {
+                        $binance->futuresCancel($order->symbol, $orderToCancel['id']);
+                        $cancelledOrders[] = $orderToCancel['type'];
+                    } catch (\Exception $cancelError) {
+                        // Order mungkin sudah filled atau cancelled
+                    }
                 }
             }
             
-            // Cancel stop loss order
-            if ($order->sl_order_id) {
-                try {
-                    $binance->futuresCancel($order->symbol, $order->sl_order_id);
-                    $cancelled[] = 'stop_loss';
-                } catch (\Exception $e) {
-                    // Order mungkin sudah triggered
-                }
-            }
-            
-            // Cancel take profit order
-            if ($order->take_profit_order_id) {
-                try {
-                    $binance->futuresCancel($order->symbol, $order->take_profit_order_id);
-                    $cancelled[] = 'take_profit';
-                } catch (\Exception $e) {
-                    // Order mungkin sudah filled
-                }
-            }
-            
-            // Update order status
+            // 2. Update order status di database
             $order->update([
-                'status' => 'EXPIRED',
-                'notes' => 'Automatically expired. Cancelled: ' . implode(', ', $cancelled)
+                'status' => 'CANCELLED',
+                'cancelled_at' => now(),
+                'notes' => 'Automatically cancelled after expiry. Cancelled orders: ' . implode(', ', array_unique($cancelledOrders))
             ]);
             
-            // Invalidate user cache
+            // 3. Invalidate user cache
             $this->tradingCache->invalidateUserCache($order->user_id);
+            
+            Log::info("✅ Order {$order->id} cancelled with all related orders", [
+                'user_id' => $order->user_id,
+                'symbol' => $order->symbol,
+                'cancelled_orders' => $cancelledOrders
+            ]);
             
             return true;
             
         } catch (\Exception $e) {
-            // Mark as expired meski cancel gagal
+            Log::error("❌ Failed to cancel order {$order->id} with SL/TP: " . $e->getMessage());
+            
+            // Update status meskipun cancel gagal
             $order->update([
                 'status' => 'EXPIRED',
-                'notes' => 'Auto expiry (cancel failed: ' . $e->getMessage() . ')'
+                'cancelled_at' => now(),
+                'notes' => 'Expired (cancel failed: ' . $e->getMessage() . ')'
             ]);
             
             return false;
         }
     }
+
     
     /**
      * ✅ METHOD: Add stop loss to filled orders
