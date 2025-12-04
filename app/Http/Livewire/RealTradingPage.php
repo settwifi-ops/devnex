@@ -695,11 +695,10 @@ class RealTradingPage extends Component
                     if (!$order->binance_order_id) continue;
                     
                     // Cek status di Binance menggunakan futuresGetOrder
-                    $binanceStatus = $binance->futuresGetOrder([
-                        'symbol' => $order->symbol,
-                        'orderId' => $order->binance_order_id
-                    ]);
-                   
+                    $binanceStatus = $binance->futuresOrderStatus(
+                        $order->symbol,
+                        ['orderId' => $order->binance_order_id]
+                    );
                     
                     $orderStatus = $binanceStatus['status'] ?? 'UNKNOWN';
                     $executedQty = $binanceStatus['executedQty'] ?? 0;
