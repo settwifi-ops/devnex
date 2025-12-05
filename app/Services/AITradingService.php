@@ -218,7 +218,7 @@ class AITradingService
     }
 
     /**
-     * ✅ ENHANCED: Validate decision dengan volume context - FIXED FOR BEARISH MARKET
+     * ✅ ENHANCED: Validate decision dengan volume context - FIXED TO ONLY WARN, NOT BLOCK
      */
     private function isValidDecision($decision)
     {
@@ -234,11 +234,14 @@ class AITradingService
             return false;
         }
 
-        // ✅ ENHANCED: MARKET CONTEXT VALIDATION WITH VOLUME AWARENESS - FIXED
+        // ✅ ENHANCED: MARKET CONTEXT VALIDATION - ONLY WARNINGS, NO BLOCKING
         $marketContext = $this->validateDecisionWithVolumeContext($decision);
-        if (!$marketContext['valid']) {
-            Log::info("⏭️ Skipping {$decision['symbol']} - Market context: " . $marketContext['reason']);
-            return false;
+        
+        // SELALU return true untuk valid decision (hanya confidence yang bisa block)
+        // Market context hanya memberikan warning
+        if ($marketContext['warning']) {
+            Log::warning("⚠️ Warning for {$decision['symbol']}: {$marketContext['warning_message']}");
+            // Tapi tetap valid untuk dieksekusi jika confidence cukup
         }
 
         return true;
@@ -264,44 +267,53 @@ class AITradingService
         $marketSentiment = $marketSummary->market_sentiment;
         $marketHealth = $marketSummary->market_health_score;
         
-        // Default response
+        // ✅ CRITICAL FIX: NEVER block analysis, only provide warnings
+        // Default response - always valid untuk analisis
         $response = [
             'valid' => true,
-            'reason' => 'Validation passed',
-            'warning' => false
+            'reason' => 'Analysis allowed',
+            'warning' => false,
+            'warning_message' => null
         ];
 
-        // ✅ CRITICAL FIX: Never block analysis, only provide warnings
+        // ✅ FIXED: JANGAN PERNAH return false untuk 'valid'
+        // Hanya tambahkan warning berdasarkan kondisi market
+        
+        // Kasus 1: Market health sangat buruk (<25)
         if ($marketHealth < 25) {
-            // Kasus 1: SELL di market bearish - diperbolehkan dengan warning
-            if ($action === 'SELL' && ($marketSentiment === 'bearish' || $marketSentiment === 'extremely_bearish')) {
-                Log::info("🎯 Allowing SELL in poor market health ({$marketHealth}) - Bearish market context");
-                $response['valid'] = true;
-                $response['reason'] = "SELL allowed in bearish market despite poor health";
-                $response['warning'] = true;
-                $response['warning_message'] = "⚠️ Market health very low ({$marketHealth}/100) - Proceed with caution";
-            } 
-            // Kasus 2: BUY/HOLD di market bearish - warning saja, jangan block
-            else if ($action === 'BUY' || $action === 'HOLD') {
-                Log::warning("⚠️ Warning: BUY/HOLD action in poor market health ({$marketHealth})");
-                $response['valid'] = true; // JANGAN block, biarkan AI menganalisis
-                $response['reason'] = "Analysis allowed with warning";
-                $response['warning'] = true;
-                $response['warning_message'] = "⚠️ Market health very low ({$marketHealth}/100) - Consider SELL instead";
-            }
-            // Kasus 3: SELL di market non-bearish - warning saja
-            else if ($action === 'SELL') {
-                Log::warning("⚠️ Warning: SELL action in poor market health ({$marketHealth}) but market not bearish");
-                $response['valid'] = true; // JANGAN block
-                $response['reason'] = "SELL analysis allowed with warning";
-                $response['warning'] = true;
-                $response['warning_message'] = "⚠️ Market health low but sentiment not bearish - Verify SELL signal";
-            }
-        }
-        // Market health sedang (25-50) - warning ringan
-        else if ($marketHealth < 50) {
             $response['warning'] = true;
-            $response['warning_message'] = "⚠️ Market health below average ({$marketHealth}/100)";
+            $response['warning_message'] = "⚠️ Market health very low ({$marketHealth}/100) - High risk environment";
+            
+            // Beri warning tambahan berdasarkan action
+            if ($action === 'BUY' || $action === 'HOLD') {
+                $response['warning_message'] .= " - Consider reducing position size or waiting";
+            } elseif ($action === 'SELL') {
+                $response['warning_message'] .= " - SELL may be appropriate in bearish conditions";
+            }
+            
+            Log::warning($response['warning_message']);
+        }
+        // Kasus 2: Market health rendah (25-50)
+        elseif ($marketHealth < 50) {
+            $response['warning'] = true;
+            $response['warning_message'] = "⚠️ Market health below average ({$marketHealth}/100) - Trade with caution";
+            
+            if ($marketSentiment === 'bearish' && $action === 'BUY') {
+                $response['warning_message'] .= " - BUY in bearish market requires strong confirmation";
+            } elseif ($marketSentiment === 'bullish' && $action === 'SELL') {
+                $response['warning_message'] .= " - SELL in bullish market requires strong confirmation";
+            }
+            
+            Log::warning($response['warning_message']);
+        }
+        // Kasus 3: Market health sedang (50-75)
+        elseif ($marketHealth < 75) {
+            $response['warning'] = false; // Tidak perlu warning
+        }
+        // Kasus 4: Market health baik (75+)
+        else {
+            $response['warning'] = false;
+            $response['reason'] = "✅ Good market conditions ({$marketHealth}/100)";
         }
         
         // ✅ UPDATE: Adjust confidence requirements untuk threshold 50
@@ -317,16 +329,20 @@ class AITradingService
         $hasBullishVolume = $hasVolumeSpike && $priceChangePercent > 0;
         $hasBearishVolume = $hasVolumeSpike && $priceChangePercent < 0;
 
-        // ✅ FIXED: Kurangi penalty untuk SELL di bearish market
+        // ✅ FIXED: Adjust confidence requirements dengan WARNING bukan BLOCK
         if ($marketSentiment === 'bearish' && $action === 'BUY') {
-            // BUY di bearish market - tetap tinggi threshold
+            // BUY di bearish market - tinggi threshold dengan warning
             $adjustedMinConfidence += 8;
-            Log::info("⚠️ BUY in bearish market - increased confidence requirement: {$adjustedMinConfidence}%");
+            $response['warning'] = true;
+            $response['warning_message'] = "⚠️ BUY in bearish market - increased confidence requirement: {$adjustedMinConfidence}%";
+            Log::warning($response['warning_message']);
         } 
         elseif ($marketSentiment === 'bullish' && $action === 'SELL') {
-            // SELL di bullish market - tinggi threshold  
+            // SELL di bullish market - tinggi threshold dengan warning  
             $adjustedMinConfidence += 8;
-            Log::info("⚠️ SELL in bullish market - increased confidence requirement: {$adjustedMinConfidence}%");
+            $response['warning'] = true;
+            $response['warning_message'] = "⚠️ SELL in bullish market - increased confidence requirement: {$adjustedMinConfidence}%";
+            Log::warning($response['warning_message']);
         }
         // ✅ NEW: SELL di bearish market - BOOST confidence (bukan penalty)
         elseif ($marketSentiment === 'bearish' && $action === 'SELL') {
@@ -348,15 +364,18 @@ class AITradingService
         }
 
         // Check jika confidence memenuhi adjusted requirement
+        // ✅ FIXED: JANGAN return false, cukup warning
         if ($decision['confidence'] < $adjustedMinConfidence) {
-            return [
-                'valid' => false, 
-                'reason' => "Low confidence for market context: {$decision['confidence']}% < {$adjustedMinConfidence}%"
-            ];
+            $response['warning'] = true;
+            $response['warning_message'] = "⚠️ Low confidence for market context: {$decision['confidence']}% < {$adjustedMinConfidence}% - Consider waiting for stronger signal";
+            Log::warning($response['warning_message']);
+            
+            // Tapi tetap valid untuk analisis
+            return $response;
         }
 
-        return ['valid' => true, 'reason' => "Market context validation passed"];
-    } // <-- TAMBAHKAN KURUNG PENUTUP DI SINI
+        return $response;
+    }
 
     /**
      * Save and execute decision
